@@ -2,7 +2,7 @@
 
 [![GoDoc Widget]][GoDoc] [![Go Report Card Widget]][Go Report Card]
 
-> A Go module that embeds the QuickJS-NG WASI WebAssembly runtime.
+> A Go module that embeds the QuickJS-NG WASI WebAssembly runtime (reactor model).
 
 [GoDoc]: https://godoc.org/github.com/paralin/go-quickjs-wasi
 [GoDoc Widget]: https://godoc.org/github.com/paralin/go-quickjs-wasi?status.svg
@@ -23,24 +23,43 @@ reigniting its development.
 ## Purpose
 
 This module provides easy access to the QuickJS-NG JavaScript engine compiled to
-WebAssembly with WASI support. The WASM binary is embedded directly in the Go
-module, making it easy to use QuickJS in Go applications without external
-dependencies.
+WebAssembly with WASI support using the **reactor model**. The WASM binary is
+embedded directly in the Go module, making it easy to use QuickJS in Go
+applications without external dependencies.
+
+### Reactor Model
+
+Unlike the standard WASI "command" model that blocks in `_start()`, the reactor
+model exports functions that the host calls, enabling re-entrant execution in
+JavaScript host environments (browsers, Node.js, Deno, Go with wazero, etc.).
+
+The reactor exports:
+- `qjs_init()` - Initialize empty runtime
+- `qjs_init_argv(argc, argv)` - Initialize with CLI args (e.g. `["qjs", "--std", "script.js"]`)
+- `qjs_eval(code, len, filename, is_module)` - Evaluate JS code from WASM memory
+- `qjs_loop_once()` - Run one iteration of the event loop (non-blocking)
+- `qjs_destroy()` - Cleanup runtime
+- `malloc/free` - For host to allocate memory for code strings
 
 ## Features
 
-- Embeds the latest QuickJS-NG WASI WebAssembly binary
+- Embeds the QuickJS-NG WASI reactor WebAssembly binary
 - Provides version information about the embedded QuickJS release
-- Automatic update script to fetch the latest QuickJS-NG release
+- High-level Go API via the `wazero-quickjs` subpackage
+- Automatic update script to fetch the latest QuickJS-NG reactor release
 
-## Usage
+## Packages
+
+### Root Package (`github.com/paralin/go-quickjs-wasi`)
+
+Provides the embedded WASM binary and version information:
 
 ```go
 package main
 
 import (
     "fmt"
-    "github.com/paralin/go-quickjs-wasi"
+    quickjswasi "github.com/paralin/go-quickjs-wasi"
 )
 
 func main() {
@@ -54,44 +73,88 @@ func main() {
 }
 ```
 
-## Example
+### Wazero QuickJS Library (`github.com/paralin/go-quickjs-wasi/wazero-quickjs`)
 
-A complete example interactive JS REPL is provided in the `./wazero-quickjs` directory.
-This demonstrates how to run QuickJS in a Wazero WebAssembly runtime.
+High-level Go API for running JavaScript with wazero:
 
-To run the REPL:
+```go
+package main
 
-```bash
-cd ./wazero-quickjs && go run ./
+import (
+    "context"
+    "embed"
+    "os"
+
+    quickjs "github.com/paralin/go-quickjs-wasi/wazero-quickjs"
+    "github.com/tetratelabs/wazero"
+)
+
+//go:embed scripts
+var scriptsFS embed.FS
+
+func main() {
+    ctx := context.Background()
+    r := wazero.NewRuntime(ctx)
+    defer r.Close(ctx)
+
+    config := wazero.NewModuleConfig().
+        WithStdout(os.Stdout).
+        WithStderr(os.Stderr).
+        WithFS(scriptsFS)  // Mount embedded filesystem
+
+    qjs, _ := quickjs.NewQuickJS(ctx, r, config)
+    defer qjs.Close(ctx)
+
+    // Option 1: Initialize with CLI args to load script via WASI filesystem
+    qjs.InitArgv(ctx, []string{"qjs", "--std", "scripts/main.js"})
+
+    // Option 2: Initialize with std module and eval code directly
+    // qjs.InitStdModule(ctx)
+    // qjs.Eval(ctx, `console.log("Hello from QuickJS!");`, false)
+
+    // Run event loop until idle
+    qjs.RunLoop(ctx)
+}
 ```
 
-This will start an interactive JavaScript shell powered by QuickJS-NG.
+See the [wazero-quickjs README](./wazero-quickjs/README.md) for more details.
 
-To install the repl run in your home directory:
+## Command-Line REPL
+
+A command-line JavaScript runner with interactive REPL mode is provided:
 
 ```bash
-go install github.com/paralin/go-quickjs-wasi/wazero-quickjs@master
-```
+# Install
+go install github.com/paralin/go-quickjs-wasi/wazero-quickjs/repl@master
 
-The `wazero-quickjs` command will now run the wazero repl.
+# Interactive REPL
+repl
+
+# Run a JavaScript file
+repl script.js
+
+# Run as ES module
+repl script.mjs --module
+```
 
 ## Updating
 
-To update to the latest QuickJS-NG release:
+To update to the latest QuickJS-NG reactor release:
 
 ```bash
 ./update-quickjs.bash
 ```
 
 This script will:
-1. Fetch the latest release information from the QuickJS-NG GitHub repository
-2. Download the `qjs-wasi.wasm` file
+1. Fetch the latest release information from the paralin/quickjs GitHub repository
+2. Download the `qjs-wasi-reactor.wasm` file
 3. Generate version information constants
 
 ## Testing
 
 ```bash
-go test
+go test ./...
+cd wazero-quickjs && go test ./...
 ```
 
 ## License
