@@ -28,6 +28,13 @@ type QuickJS struct {
 	free     api.Function
 }
 
+// CompileQuickJS compiles the embedded QuickJS WASM module.
+// The compiled module can be reused across multiple QuickJS instances for better performance.
+// The caller should also instantiate WASI on the runtime before using the compiled module.
+func CompileQuickJS(ctx context.Context, r wazero.Runtime) (wazero.CompiledModule, error) {
+	return r.CompileModule(ctx, quickjswasi.QuickJSWASM)
+}
+
 // NewQuickJS creates a new QuickJS instance using the embedded WASM reactor.
 // The provided config is used for module instantiation (stdin, stdout, stderr, fs, etc.).
 // Call Close() when done to release resources.
@@ -38,11 +45,25 @@ func NewQuickJS(ctx context.Context, r wazero.Runtime, config wazero.ModuleConfi
 	}
 
 	// Compile the module
-	compiled, err := r.CompileModule(ctx, quickjswasi.QuickJSWASM)
+	compiled, err := CompileQuickJS(ctx, r)
 	if err != nil {
 		return nil, err
 	}
 
+	return NewQuickJSWithModule(ctx, r, compiled, config)
+}
+
+// NewQuickJSWithModule creates a new QuickJS instance using a pre-compiled module.
+// This is useful when you want to reuse a compiled module across multiple instances
+// for better startup performance.
+//
+// Prerequisites:
+//   - WASI must be instantiated on the runtime (wasi_snapshot_preview1.Instantiate)
+//   - The compiled module must be from CompileQuickJS or compiled from quickjswasi.QuickJSWASM
+//
+// The provided config is used for module instantiation (stdin, stdout, stderr, fs, etc.).
+// Call Close() when done to release resources.
+func NewQuickJSWithModule(ctx context.Context, r wazero.Runtime, compiled wazero.CompiledModule, config wazero.ModuleConfig) (*QuickJS, error) {
 	// Instantiate without running _start (reactor mode)
 	mod, err := r.InstantiateModule(ctx, compiled, config.WithName(quickjswasi.QuickJSWASMFilename))
 	if err != nil {
