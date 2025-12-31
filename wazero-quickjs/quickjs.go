@@ -70,6 +70,16 @@ func NewQuickJSWithModule(ctx context.Context, r wazero.Runtime, compiled wazero
 		return nil, err
 	}
 
+	// Call _initialize to set up WASI environment (env vars, args, etc.)
+	// This is required for reactor modules to properly initialize WASI state.
+	initializeFn := mod.ExportedFunction("_initialize")
+	if initializeFn != nil {
+		if _, err := initializeFn.Call(ctx); err != nil {
+			_ = mod.Close(ctx)
+			return nil, errors.New("_initialize failed: " + err.Error())
+		}
+	}
+
 	q := &QuickJS{
 		runtime:  r,
 		mod:      mod,

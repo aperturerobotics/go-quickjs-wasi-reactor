@@ -293,6 +293,59 @@ func TestInitArgvWithStd(t *testing.T) {
 	}
 }
 
+func TestWASIEnvVars(t *testing.T) {
+	ctx := context.Background()
+
+	r := wazero.NewRuntime(ctx)
+	defer r.Close(ctx)
+
+	var stdout bytes.Buffer
+
+	config := wazero.NewModuleConfig().
+		WithStdout(&stdout).
+		WithStderr(&stdout).
+		WithEnv("TEST_VAR", "hello_from_wasi").
+		WithEnv("ANOTHER_VAR", "another_value")
+
+	qjs, err := NewQuickJS(ctx, r, config)
+	if err != nil {
+		t.Fatalf("failed to create QuickJS: %v", err)
+	}
+	defer qjs.Close(ctx)
+
+	// Use InitStdModule to get std.getenv
+	if err := qjs.InitStdModule(ctx); err != nil {
+		t.Fatalf("failed to init QuickJS with std module: %v", err)
+	}
+
+	// Test reading WASI environment variables via std.getenv
+	code := `
+		console.log("TEST_VAR:", std.getenv("TEST_VAR"));
+		console.log("ANOTHER_VAR:", std.getenv("ANOTHER_VAR"));
+		console.log("UNDEFINED_VAR:", std.getenv("UNDEFINED_VAR"));
+	`
+	if err := qjs.Eval(ctx, code, false); err != nil {
+		t.Fatalf("failed to eval: %v", err)
+	}
+
+	if err := qjs.RunLoop(ctx); err != nil {
+		t.Fatalf("event loop error: %v", err)
+	}
+
+	output := stdout.String()
+	t.Logf("Output: %s", output)
+
+	if !strings.Contains(output, "TEST_VAR: hello_from_wasi") {
+		t.Errorf("expected TEST_VAR to be 'hello_from_wasi', got: %s", output)
+	}
+	if !strings.Contains(output, "ANOTHER_VAR: another_value") {
+		t.Errorf("expected ANOTHER_VAR to be 'another_value', got: %s", output)
+	}
+	if !strings.Contains(output, "UNDEFINED_VAR: undefined") {
+		t.Errorf("expected UNDEFINED_VAR to be undefined, got: %s", output)
+	}
+}
+
 func TestContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
