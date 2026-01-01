@@ -13,6 +13,7 @@ import _ "embed"
 //   - qjs_init_argv(argc, argv) - Initialize with CLI args (e.g. ["qjs", "--std", "script.js"])
 //   - qjs_eval(code, len, filename, is_module) - Evaluate JS code from WASM memory
 //   - qjs_loop_once() - Run one iteration of the event loop (non-blocking)
+//   - qjs_poll_io(timeout_ms) - Poll for I/O and invoke read/write handlers
 //   - qjs_destroy() - Cleanup runtime
 //   - malloc/free - For host to allocate memory for code strings
 //
@@ -48,6 +49,20 @@ const (
 	//   -1: idle, no pending work
 	//   -2: error occurred
 	ExportLoopOnce = "qjs_loop_once"
+
+	// ExportPollIO polls for I/O events and invokes registered read/write handlers.
+	// This must be called when the host knows stdin (or other fds) have data available.
+	// Signature: qjs_poll_io(timeout_ms: i32) -> i32
+	// Parameters:
+	//   timeout_ms: Poll timeout in milliseconds
+	//     0 = non-blocking (check and return immediately)
+	//     >0 = wait up to timeout_ms for I/O events
+	//     -1 = block indefinitely (not recommended)
+	// Returns:
+	//   0: success (handler invoked or no handlers registered)
+	//   -1: error or no I/O handlers
+	//   -2: not initialized or exception in handler
+	ExportPollIO = "qjs_poll_io"
 
 	// ExportDestroy cleans up the QuickJS runtime.
 	// Signature: qjs_destroy() -> void

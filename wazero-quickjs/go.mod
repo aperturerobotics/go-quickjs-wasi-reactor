@@ -7,6 +7,8 @@ require (
 	github.com/tetratelabs/wazero v1.11.0
 )
 
-require golang.org/x/sys v0.38.0 // indirect
-
 replace github.com/paralin/go-quickjs-wasi => ../
+
+// Use aperture fork which exposes experimental/fsapi for pollable stdin
+// https://github.com/tetratelabs/wazero/issues/1500#issuecomment-3041125375
+replace github.com/tetratelabs/wazero => github.com/aperturerobotics/wazero v0.0.0-20250706223739-81a39a0d5d54

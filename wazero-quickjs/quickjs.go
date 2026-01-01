@@ -23,6 +23,7 @@ type QuickJS struct {
 	initArgv api.Function
 	eval     api.Function
 	loopOnce api.Function
+	pollIO   api.Function
 	destroy  api.Function
 	malloc   api.Function
 	free     api.Function
@@ -87,6 +88,7 @@ func NewQuickJSWithModule(ctx context.Context, r wazero.Runtime, compiled wazero
 		initArgv: mod.ExportedFunction(quickjswasi.ExportInitArgv),
 		eval:     mod.ExportedFunction(quickjswasi.ExportEval),
 		loopOnce: mod.ExportedFunction(quickjswasi.ExportLoopOnce),
+		pollIO:   mod.ExportedFunction(quickjswasi.ExportPollIO),
 		destroy:  mod.ExportedFunction(quickjswasi.ExportDestroy),
 		malloc:   mod.ExportedFunction(quickjswasi.ExportMalloc),
 		free:     mod.ExportedFunction(quickjswasi.ExportFree),
@@ -345,6 +347,34 @@ func (q *QuickJS) LoopOnce(ctx context.Context) (LoopResult, error) {
 		return LoopError, errors.New("qjs_loop_once returned no result")
 	}
 	return LoopResult(int32(results[0])), nil
+}
+
+// PollIO polls for I/O events and invokes registered read/write handlers.
+// This must be called when the host knows that stdin (or other fds) have data available,
+// otherwise os.setReadHandler callbacks will never fire.
+//
+// Parameters:
+//   - timeoutMs: Poll timeout in milliseconds
+//     0 = non-blocking (check and return immediately)
+//     >0 = wait up to timeoutMs for I/O events
+//     -1 = block indefinitely (not recommended for reactor model)
+//
+// Returns:
+//   - 0: success (handler invoked or no handlers registered)
+//   - -1: error or no I/O handlers
+//   - -2: not initialized or exception in handler
+func (q *QuickJS) PollIO(ctx context.Context, timeoutMs int32) (int32, error) {
+	if q.pollIO == nil {
+		return -1, errors.New("qjs_poll_io not available")
+	}
+	results, err := q.pollIO.Call(ctx, uint64(timeoutMs))
+	if err != nil {
+		return -2, err
+	}
+	if len(results) == 0 {
+		return -2, errors.New("qjs_poll_io returned no result")
+	}
+	return int32(results[0]), nil
 }
 
 // RunLoop runs the event loop until idle or context is canceled.
