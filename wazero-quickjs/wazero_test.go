@@ -41,9 +41,19 @@ func TestRunJavaScriptFile(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	// Initialize with argv to load the script via WASI filesystem
-	if err := qjs.InitArgv(ctx, []string{"qjs", "wazero_test.js"}); err != nil {
-		t.Fatalf("failed to init QuickJS: %v", err)
+	// Initialize with std module (provides std, os, bjson globals)
+	if err := qjs.InitStdModule(ctx); err != nil {
+		t.Fatalf("failed to init QuickJS with std module: %v", err)
+	}
+
+	// Read and evaluate the test file
+	code, err := testFS.ReadFile("wazero_test.js")
+	if err != nil {
+		t.Fatalf("failed to read test file: %v", err)
+	}
+
+	if err := qjs.Eval(ctx, string(code), false); err != nil {
+		t.Fatalf("failed to eval: %v", err)
 	}
 
 	// Run the event loop until complete
@@ -269,9 +279,9 @@ func TestInitArgvWithStd(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	// Initialize with --std flag via argv
-	if err := qjs.InitArgv(ctx, []string{"qjs", "--std"}); err != nil {
-		t.Fatalf("failed to init QuickJS with --std: %v", err)
+	// Initialize with std module to make std/os available globally
+	if err := qjs.InitStdModule(ctx); err != nil {
+		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
 	// Now std and os should be available globally
@@ -530,9 +540,9 @@ func TestStdinReadHandler(t *testing.T) {
 	}
 	defer qjs.Close(context.Background())
 
-	// Initialize with --std to get os.setReadHandler
-	if err := qjs.InitArgv(ctx, []string{"qjs", "--std"}); err != nil {
-		t.Fatalf("failed to init QuickJS with --std: %v", err)
+	// Initialize with std module to get os.setReadHandler
+	if err := qjs.InitStdModule(ctx); err != nil {
+		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
 	// JavaScript code that:

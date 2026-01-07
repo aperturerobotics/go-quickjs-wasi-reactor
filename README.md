@@ -13,7 +13,7 @@
 
 - [js-quickjs-wasi-reactor](https://github.com/aperturerobotics/js-quickjs-wasi-reactor) - JavaScript/TypeScript harness for browser environments
 - [go-quickjs-wasi](https://github.com/paralin/go-quickjs-wasi) - Standard WASI command model with blocking `_start()` entry point
-- [paralin/quickjs](https://github.com/paralin/quickjs) - Fork with `QJS_WASI_REACTOR` build target (see [QJS_WASI_REACTOR.md](https://github.com/paralin/quickjs/blob/master/QJS_WASI_REACTOR.md) for design docs)
+- [paralin/quickjs](https://github.com/paralin/quickjs) - Fork with `QJS_WASI_REACTOR` build target
 - [QuickJS-NG reactor PR](https://github.com/quickjs-ng/quickjs/pull/1307) - Upstream PR for reactor support
 
 ## Variants
@@ -41,23 +41,33 @@ applications without external dependencies.
 ### Reactor Model
 
 Unlike the standard WASI "command" model that blocks in `_start()`, the reactor
-model exports functions that the host calls, enabling re-entrant execution in
-JavaScript host environments (browsers, Node.js, Deno, Go with wazero, etc.).
+model exports the raw QuickJS C API functions, enabling full control over the
+JavaScript runtime lifecycle from the host environment.
 
-The reactor exports:
-- `qjs_init()` - Initialize empty runtime
-- `qjs_init_argv(argc, argv)` - Initialize with CLI args (e.g. `["qjs", "--std", "script.js"]`)
-- `qjs_eval(code, len, filename, is_module)` - Evaluate JS code from WASM memory
-- `qjs_loop_once()` - Run one iteration of the event loop (non-blocking)
-- `qjs_destroy()` - Cleanup runtime
-- `malloc/free` - For host to allocate memory for code strings
+The reactor exports the complete QuickJS C API including:
+
+**Core Runtime:**
+- `JS_NewRuntime`, `JS_FreeRuntime` - Runtime lifecycle
+- `JS_NewContext`, `JS_FreeContext` - Context lifecycle
+- `JS_Eval` - Evaluate JavaScript code
+- `JS_Call` - Call JavaScript functions
+
+**Standard Library (quickjs-libc.h):**
+- `js_init_module_std`, `js_init_module_os`, `js_init_module_bjson` - Module initialization
+- `js_std_init_handlers`, `js_std_free_handlers` - I/O handler setup
+- `js_std_add_helpers` - Add console.log, print, etc.
+- `js_std_loop_once` - Run one iteration of the event loop (non-blocking)
+- `js_std_poll_io` - Poll for I/O events
+
+**Memory Management:**
+- `malloc`, `free`, `realloc`, `calloc` - For host to allocate memory
 
 ## Features
 
 - Embeds the QuickJS-NG WASI reactor WebAssembly binary
 - Provides version information about the embedded QuickJS release
 - High-level Go API via the `wazero-quickjs` subpackage
-- Automatic update script to fetch the latest QuickJS-NG reactor release
+- Update script to build and copy from local QuickJS checkout
 
 ## Packages
 
@@ -150,16 +160,40 @@ repl script.mjs --module
 
 ## Updating
 
-To update to the latest QuickJS-NG reactor release:
+To update to the latest QuickJS-NG reactor build from a local checkout:
 
 ```bash
-./update-quickjs.bash
+# Set QUICKJS_DIR to your quickjs checkout (default: ../quickjs)
+QUICKJS_DIR=/path/to/quickjs ./update-quickjs.bash
 ```
 
 This script will:
-1. Fetch the latest release information from the paralin/quickjs GitHub repository
-2. Download the `qjs-wasi-reactor.wasm` file
+1. Read the current branch and commit from your local quickjs checkout
+2. Copy the `qjs-wasi-reactor.wasm` file
 3. Generate version information constants
+
+### Building the WASM file
+
+To build the WASM file from source:
+
+```bash
+cd /path/to/quickjs
+
+# Create build directory
+mkdir -p build-wasi-reactor && cd build-wasi-reactor
+
+# Configure with WASI SDK
+cmake .. \
+  -DCMAKE_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk.cmake \
+  -DQJS_WASI_REACTOR=ON \
+  -DCMAKE_BUILD_TYPE=Release
+
+# Build
+make -j
+
+# Copy output
+cp qjs.wasm ../qjs-wasi-reactor.wasm
+```
 
 ## Testing
 

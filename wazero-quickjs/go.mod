@@ -1,6 +1,6 @@
 module github.com/aperturerobotics/go-quickjs-wasi-reactor/wazero-quickjs
 
-go 1.24.0
+go 1.24.4
 
 require (
 	github.com/aperturerobotics/go-quickjs-wasi-reactor v0.11.1-0.20251229075347-4b963494666d
