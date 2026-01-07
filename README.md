@@ -24,9 +24,10 @@ This repository provides the **reactor model** WASM binary for re-entrant execut
 
 QuickJS is a small and embeddable JavaScript engine. It aims to support the latest ECMAScript specification.
 
-This project uses [QuickJS-NG] which is a fork of the original [QuickJS project]
-by Fabrice Bellard and Charlie Gordon, after it went dormant, with the intent of
-reigniting its development.
+This project uses [QuickJS-NG], a community-driven fork of the original
+[QuickJS project] by Fabrice Bellard and Charlie Gordon. Both projects are
+actively maintained; QuickJS-NG focuses on community contributions and features
+like the WASI reactor build used here.
 
 [QuickJS-NG]: https://github.com/quickjs-ng/quickjs
 [QuickJS project]: https://bellard.org/quickjs/
@@ -136,6 +137,64 @@ func main() {
     // Run event loop until idle
     qjs.RunLoop(ctx)
 }
+```
+
+### Initialization Options
+
+There are three ways to initialize QuickJS:
+
+```go
+// Option 1: Init() - Basic runtime with std modules available for import
+qjs.Init(ctx)
+qjs.Eval(ctx, `import * as std from 'qjs:std'; std.printf("Hello\n")`, true)
+
+// Option 2: InitStdModule() - Like Init() but exposes std, os, bjson as globals
+qjs.InitStdModule(ctx)
+qjs.Eval(ctx, `std.printf("Hello\n")`, false)  // std is already global
+
+// Option 3: InitArgv(args) - Like Init() but sets up scriptArgs
+qjs.InitArgv(ctx, []string{"qjs", "script.js", "--verbose"})
+qjs.Eval(ctx, `console.log(scriptArgs)`, false)  // ['qjs', 'script.js', '--verbose']
+```
+
+### Non-Blocking Event Loop
+
+The reactor model enables cooperative scheduling with the host:
+
+```go
+// Instead of blocking RunLoop(), use LoopOnce() for fine-grained control
+for {
+    result, err := qjs.LoopOnce(ctx)
+    if err != nil {
+        return err
+    }
+    
+    switch {
+    case result == quickjs.LoopIdle:
+        // No pending work - done
+        return nil
+    case result == quickjs.LoopError:
+        return errors.New("JavaScript error")
+    case result == 0:
+        // More microtasks pending - continue immediately
+        continue
+    case result > 0:
+        // Timer pending - host can do other work before next iteration
+        time.Sleep(time.Duration(result) * time.Millisecond)
+    }
+}
+```
+
+### I/O Polling
+
+For scripts that use `os.setReadHandler()`, the host must poll for I/O:
+
+```go
+// Poll for I/O events (non-blocking)
+result, _ := qjs.PollIO(ctx, 0)
+
+// Poll with timeout (blocking up to 100ms)
+result, _ := qjs.PollIO(ctx, 100)
 ```
 
 See the [wazero-quickjs README](./wazero-quickjs/README.md) for more details.
