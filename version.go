@@ -6,7 +6,7 @@ const (
 	// Built from paralin/quickjs wasi-reactor-libc branch
 	Version = "v0.11.0-wasi-reactor-libc"
 	// GitCommit is the git commit hash of the quickjs source
-	GitCommit = "a2ce1fc4f092ca793cc673f8227ff42ae746853a"
+	GitCommit = "dd6edb6b7c2736ff337431f245770727cd3dc720"
 	// DownloadURL is the URL where this WASM file was downloaded from (or empty for local build)
 	DownloadURL = ""
 )
