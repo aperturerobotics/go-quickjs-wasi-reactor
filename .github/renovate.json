@@ -16,7 +16,7 @@
     {
       "matchManagers": ["gomod"],
       "matchPackageNames": [
-        "github.com/paralin/go-quickjs-wasi",
+        "github.com/aperturerobotics/go-quickjs-wasi",
       ],
       "enabled": false
     }

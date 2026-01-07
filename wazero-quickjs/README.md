@@ -5,7 +5,7 @@ High-level Go API for running JavaScript using QuickJS-NG with [wazero](https://
 ## Installation
 
 ```bash
-go get github.com/paralin/go-quickjs-wasi/wazero-quickjs
+go get github.com/aperturerobotics/go-quickjs-wasi/wazero-quickjs
 ```
 
 ## Usage
@@ -20,7 +20,7 @@ import (
     "embed"
     "os"
 
-    quickjs "github.com/paralin/go-quickjs-wasi/wazero-quickjs"
+    quickjs "github.com/aperturerobotics/go-quickjs-wasi/wazero-quickjs"
     "github.com/tetratelabs/wazero"
 )
 
@@ -65,7 +65,7 @@ import (
     "context"
     "os"
 
-    quickjs "github.com/paralin/go-quickjs-wasi/wazero-quickjs"
+    quickjs "github.com/aperturerobotics/go-quickjs-wasi/wazero-quickjs"
     "github.com/tetratelabs/wazero"
 )
 
@@ -176,7 +176,7 @@ A command-line JavaScript runner with interactive REPL mode.
 cd repl && go run .
 
 # Install globally
-go install github.com/paralin/go-quickjs-wasi/wazero-quickjs/repl@master
+go install github.com/aperturerobotics/go-quickjs-wasi/wazero-quickjs/repl@master
 
 # Interactive REPL (no arguments)
 repl

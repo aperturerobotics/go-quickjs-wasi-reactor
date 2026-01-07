@@ -8,7 +8,7 @@ import (
 	"errors"
 	"time"
 
-	quickjswasi "github.com/paralin/go-quickjs-wasi"
+	quickjswasi "github.com/aperturerobotics/go-quickjs-wasi"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"

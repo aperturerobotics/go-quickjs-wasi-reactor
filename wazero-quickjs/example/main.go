@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	quickjs "github.com/paralin/go-quickjs-wasi/wazero-quickjs"
+	quickjs "github.com/aperturerobotics/go-quickjs-wasi/wazero-quickjs"
 	"github.com/tetratelabs/wazero"
 )
 
