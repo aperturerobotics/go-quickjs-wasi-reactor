@@ -1,3 +1,3 @@
-module github.com/aperturerobotics/go-quickjs-wasi
+module github.com/aperturerobotics/go-quickjs-wasi-reactor
 
 go 1.24

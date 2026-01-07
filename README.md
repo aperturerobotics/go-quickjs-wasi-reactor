@@ -4,10 +4,10 @@
 
 > A Go module that embeds the QuickJS-NG WASI WebAssembly runtime (reactor model).
 
-[GoDoc]: https://godoc.org/github.com/aperturerobotics/go-quickjs-wasi
-[GoDoc Widget]: https://godoc.org/github.com/aperturerobotics/go-quickjs-wasi?status.svg
-[Go Report Card Widget]: https://goreportcard.com/badge/github.com/aperturerobotics/go-quickjs-wasi
-[Go Report Card]: https://goreportcard.com/report/github.com/aperturerobotics/go-quickjs-wasi
+[GoDoc]: https://godoc.org/github.com/aperturerobotics/go-quickjs-wasi-reactor
+[GoDoc Widget]: https://godoc.org/github.com/aperturerobotics/go-quickjs-wasi-reactor?status.svg
+[Go Report Card Widget]: https://goreportcard.com/badge/github.com/aperturerobotics/go-quickjs-wasi-reactor
+[Go Report Card]: https://goreportcard.com/report/github.com/aperturerobotics/go-quickjs-wasi-reactor
 
 ## About QuickJS-NG
 
@@ -50,7 +50,7 @@ The reactor exports:
 
 ## Packages
 
-### Root Package (`github.com/aperturerobotics/go-quickjs-wasi`)
+### Root Package (`github.com/aperturerobotics/go-quickjs-wasi-reactor`)
 
 Provides the embedded WASM binary and version information:
 
@@ -59,7 +59,7 @@ package main
 
 import (
     "fmt"
-    quickjswasi "github.com/aperturerobotics/go-quickjs-wasi"
+    quickjswasi "github.com/aperturerobotics/go-quickjs-wasi-reactor"
 )
 
 func main() {
@@ -73,7 +73,7 @@ func main() {
 }
 ```
 
-### Wazero QuickJS Library (`github.com/aperturerobotics/go-quickjs-wasi/wazero-quickjs`)
+### Wazero QuickJS Library (`github.com/aperturerobotics/go-quickjs-wasi-reactor/wazero-quickjs`)
 
 High-level Go API for running JavaScript with wazero:
 
@@ -85,7 +85,7 @@ import (
     "embed"
     "os"
 
-    quickjs "github.com/aperturerobotics/go-quickjs-wasi/wazero-quickjs"
+    quickjs "github.com/aperturerobotics/go-quickjs-wasi-reactor/wazero-quickjs"
     "github.com/tetratelabs/wazero"
 )
 
@@ -125,7 +125,7 @@ A command-line JavaScript runner with interactive REPL mode is provided:
 
 ```bash
 # Install
-go install github.com/aperturerobotics/go-quickjs-wasi/wazero-quickjs/repl@master
+go install github.com/aperturerobotics/go-quickjs-wasi-reactor/wazero-quickjs/repl@master
 
 # Interactive REPL
 repl
