@@ -9,15 +9,16 @@
 [Go Report Card Widget]: https://goreportcard.com/badge/github.com/aperturerobotics/go-quickjs-wasi-reactor
 [Go Report Card]: https://goreportcard.com/report/github.com/aperturerobotics/go-quickjs-wasi-reactor
 
+## Related Projects
+
+- [js-quickjs-wasi-reactor](https://github.com/aperturerobotics/js-quickjs-wasi-reactor) - JavaScript/TypeScript harness for browser environments
+- [go-quickjs-wasi](https://github.com/paralin/go-quickjs-wasi) - Standard WASI command model with blocking `_start()` entry point
+- [paralin/quickjs](https://github.com/paralin/quickjs) - Fork with `QJS_WASI_REACTOR` build target (see [QJS_WASI_REACTOR.md](https://github.com/paralin/quickjs/blob/master/QJS_WASI_REACTOR.md) for design docs)
+- [QuickJS-NG reactor PR](https://github.com/quickjs-ng/quickjs/pull/1307) - Upstream PR for reactor support
+
 ## Variants
 
-This repository provides the **reactor model** WASM binary for re-entrant execution. If you only need simple blocking execution where QuickJS runs to completion in `_start()`, see the **command model** variant:
-
-- [go-quickjs-wasi](https://github.com/paralin/go-quickjs-wasi) - Standard WASI command model with blocking `_start()` entry point
-
-The reactor WASM binary is built from a fork of QuickJS-NG with the reactor build target:
-
-- [paralin/quickjs](https://github.com/paralin/quickjs) - Fork with `QJS_WASI_REACTOR` build target (see [QJS_WASI_REACTOR.md](https://github.com/paralin/quickjs/blob/master/QJS_WASI_REACTOR.md) for design docs)
+This repository provides the **reactor model** WASM binary for re-entrant execution. If you only need simple blocking execution where QuickJS runs to completion in `_start()`, see the **command model** variant above.
 
 ## About QuickJS-NG
 
