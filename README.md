@@ -14,7 +14,8 @@
 - [js-quickjs-wasi-reactor](https://github.com/aperturerobotics/js-quickjs-wasi-reactor) - JavaScript/TypeScript harness for browser environments
 - [go-quickjs-wasi](https://github.com/paralin/go-quickjs-wasi) - Standard WASI command model with blocking `_start()` entry point
 - [paralin/quickjs](https://github.com/paralin/quickjs) - Fork with `QJS_WASI_REACTOR` build target
-- [QuickJS-NG reactor PR](https://github.com/quickjs-ng/quickjs/pull/1307) - Upstream PR for reactor support
+- [QuickJS-NG reactor PR](https://github.com/quickjs-ng/quickjs/pull/1308) - Upstream PR for reactor support
+- [QuickJS-NG event loop PR](https://github.com/quickjs-ng/quickjs/pull/1307) - Upstream PR for non-blocking event loop
 
 ## Variants
 
