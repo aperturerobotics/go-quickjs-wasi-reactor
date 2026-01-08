@@ -65,6 +65,11 @@ type QuickJS struct {
 	jsSetModuleLoaderFunc api.Function
 	jsModuleSetImportMeta api.Function
 
+	// Reactor initialization exports
+	qjsInitArgv   api.Function
+	qjsGetContext api.Function
+	qjsDestroy    api.Function
+
 	// Runtime state (managed by QuickJS struct)
 	rtPtr  uint32 // JSRuntime*
 	ctxPtr uint32 // JSContext*
@@ -169,6 +174,11 @@ func NewQuickJSWithModule(ctx context.Context, r wazero.Runtime, compiled wazero
 		jsModuleLoader:        mod.ExportedFunction(quickjswasi.ExportJSModuleLoader),
 		jsSetModuleLoaderFunc: mod.ExportedFunction(quickjswasi.ExportJSSetModuleLoaderFunc),
 		jsModuleSetImportMeta: mod.ExportedFunction(quickjswasi.ExportJSModuleSetImportMeta),
+
+		// Reactor initialization
+		qjsInitArgv:   mod.ExportedFunction(quickjswasi.ExportQJSInitArgv),
+		qjsGetContext: mod.ExportedFunction(quickjswasi.ExportQJSGetContext),
+		qjsDestroy:    mod.ExportedFunction(quickjswasi.ExportQJSDestroy),
 	}
 
 	// Validate required exports
@@ -198,6 +208,15 @@ func NewQuickJSWithModule(ctx context.Context, r wazero.Runtime, compiled wazero
 	}
 	if q.jsStdLoopOnce == nil {
 		return nil, errors.New("missing export: " + quickjswasi.ExportJSStdLoopOnce)
+	}
+	if q.qjsInitArgv == nil {
+		return nil, errors.New("missing export: " + quickjswasi.ExportQJSInitArgv)
+	}
+	if q.qjsGetContext == nil {
+		return nil, errors.New("missing export: " + quickjswasi.ExportQJSGetContext)
+	}
+	if q.qjsDestroy == nil {
+		return nil, errors.New("missing export: " + quickjswasi.ExportQJSDestroy)
 	}
 
 	return q, nil
@@ -229,160 +248,99 @@ func (q *QuickJS) freePtr(ctx context.Context, ptr uint32) {
 	}
 }
 
-// stdModuleInit is the JavaScript code to import and expose the std modules globally.
-const stdModuleInit = `import * as bjson from 'qjs:bjson';
-import * as std from 'qjs:std';
-import * as os from 'qjs:os';
-globalThis.bjson = bjson;
-globalThis.std = std;
-globalThis.os = os;
-`
+// Init initializes the QuickJS runtime and context with optional command-line arguments.
+// This must be called before Eval. Uses qjs_init_argv which sets up the module loader.
+//
+// Supported flags in args:
+//   - --std: Load std, os, bjson modules as globals
+//   - -m, --module: Treat script as ES module
+//   - -e, --eval: Evaluate expression
+//   - -I, --include: Include file before script
+//
+// Example: Init(ctx, []string{"qjs", "--std", "/boot/script.js"})
+// Pass nil for default initialization.
+func (q *QuickJS) Init(ctx context.Context, args []string) error {
+	if q.ctxPtr != 0 {
+		return errors.New("QuickJS already initialized")
+	}
 
-// Init initializes the QuickJS runtime and context.
-// This must be called before Eval.
-func (q *QuickJS) Init(ctx context.Context) error {
-	// Create runtime
-	rtResults, err := q.jsNewRuntime.Call(ctx)
+	argc := len(args)
+	if argc == 0 {
+		args = []string{"qjs"}
+		argc = 1
+	}
+
+	// Allocate argv strings
+	argPtrs := make([]uint32, argc)
+	for i, arg := range args {
+		ptr, err := q.allocString(ctx, arg)
+		if err != nil {
+			for j := 0; j < i; j++ {
+				q.freePtr(ctx, argPtrs[j])
+			}
+			return err
+		}
+		argPtrs[i] = ptr
+	}
+
+	// Allocate argv pointer array
+	argvResults, err := q.malloc.Call(ctx, uint64(argc*4))
 	if err != nil {
-		return errors.New("JS_NewRuntime failed: " + err.Error())
-	}
-	q.rtPtr = uint32(rtResults[0])
-	if q.rtPtr == 0 {
-		return errors.New("JS_NewRuntime returned null")
-	}
-
-	// Initialize std handlers
-	if q.jsStdInitHandlers != nil {
-		if _, err := q.jsStdInitHandlers.Call(ctx, uint64(q.rtPtr)); err != nil {
-			q.jsFreeRuntime.Call(ctx, uint64(q.rtPtr))
-			q.rtPtr = 0
-			return errors.New("js_std_init_handlers failed: " + err.Error())
-		}
-	}
-
-	// Create context
-	ctxResults, err := q.jsNewContext.Call(ctx, uint64(q.rtPtr))
-	if err != nil {
-		q.jsStdFreeHandlers.Call(ctx, uint64(q.rtPtr))
-		q.jsFreeRuntime.Call(ctx, uint64(q.rtPtr))
-		q.rtPtr = 0
-		return errors.New("JS_NewContext failed: " + err.Error())
-	}
-	q.ctxPtr = uint32(ctxResults[0])
-	if q.ctxPtr == 0 {
-		q.jsStdFreeHandlers.Call(ctx, uint64(q.rtPtr))
-		q.jsFreeRuntime.Call(ctx, uint64(q.rtPtr))
-		q.rtPtr = 0
-		return errors.New("JS_NewContext returned null")
-	}
-
-	// Set up module loader
-	if q.jsSetModuleLoaderFunc != nil && q.jsModuleLoader != nil {
-		// Get the function table index for js_module_loader
-		// Note: In WASI, we use the exported function pointer directly
-		// For now, we just call js_module_loader directly when loading modules
-	}
-
-	// Initialize std modules
-	if q.jsInitModuleStd != nil {
-		stdName, err := q.allocString(ctx, "qjs:std")
-		if err != nil {
-			return err
-		}
-		q.jsInitModuleStd.Call(ctx, uint64(q.ctxPtr), uint64(stdName))
-		q.freePtr(ctx, stdName)
-	}
-	if q.jsInitModuleOS != nil {
-		osName, err := q.allocString(ctx, "qjs:os")
-		if err != nil {
-			return err
-		}
-		q.jsInitModuleOS.Call(ctx, uint64(q.ctxPtr), uint64(osName))
-		q.freePtr(ctx, osName)
-	}
-	if q.jsInitModuleBJSON != nil {
-		bjsonName, err := q.allocString(ctx, "qjs:bjson")
-		if err != nil {
-			return err
-		}
-		q.jsInitModuleBJSON.Call(ctx, uint64(q.ctxPtr), uint64(bjsonName))
-		q.freePtr(ctx, bjsonName)
-	}
-
-	// Add std helpers (console.log, print, etc.)
-	if q.jsStdAddHelpers != nil {
-		// Pass argc=0, argv=NULL
-		q.jsStdAddHelpers.Call(ctx, uint64(q.ctxPtr), 0, 0)
-	}
-
-	return nil
-}
-
-// InitArgv initializes the QuickJS runtime with command-line arguments.
-// This can be used to pass args to scripts via globalThis.scriptArgs.
-func (q *QuickJS) InitArgv(ctx context.Context, args []string) error {
-	if err := q.Init(ctx); err != nil {
-		return err
-	}
-
-	if len(args) > 0 && q.jsStdAddHelpers != nil {
-		// Allocate argv array
-		argc := len(args)
-		argPtrs := make([]uint32, argc)
-		for i, arg := range args {
-			ptr, err := q.allocString(ctx, arg)
-			if err != nil {
-				for j := 0; j < i; j++ {
-					q.freePtr(ctx, argPtrs[j])
-				}
-				return err
-			}
-			argPtrs[i] = ptr
-		}
-
-		// Allocate argv pointer array
-		argvResults, err := q.malloc.Call(ctx, uint64(argc*4))
-		if err != nil {
-			for _, ptr := range argPtrs {
-				q.freePtr(ctx, ptr)
-			}
-			return err
-		}
-		argvPtr := uint32(argvResults[0])
-		if argvPtr == 0 {
-			for _, ptr := range argPtrs {
-				q.freePtr(ctx, ptr)
-			}
-			return errors.New("malloc returned null for argv")
-		}
-
-		// Write argv pointers
-		for i, ptr := range argPtrs {
-			ptrBytes := make([]byte, 4)
-			binary.LittleEndian.PutUint32(ptrBytes, ptr)
-			q.mod.Memory().Write(argvPtr+uint32(i*4), ptrBytes)
-		}
-
-		// Call js_std_add_helpers with argv
-		q.jsStdAddHelpers.Call(ctx, uint64(q.ctxPtr), uint64(argc), uint64(argvPtr))
-
-		// Free argv
-		q.freePtr(ctx, argvPtr)
 		for _, ptr := range argPtrs {
 			q.freePtr(ctx, ptr)
 		}
+		return err
+	}
+	argvPtr := uint32(argvResults[0])
+	if argvPtr == 0 {
+		for _, ptr := range argPtrs {
+			q.freePtr(ctx, ptr)
+		}
+		return errors.New("malloc returned null for argv")
+	}
+
+	// Write argv pointers
+	for i, ptr := range argPtrs {
+		ptrBytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(ptrBytes, ptr)
+		q.mod.Memory().Write(argvPtr+uint32(i*4), ptrBytes)
+	}
+
+	// Call qjs_init_argv
+	initResults, err := q.qjsInitArgv.Call(ctx, uint64(argc), uint64(argvPtr))
+
+	// Free argv memory
+	q.freePtr(ctx, argvPtr)
+	for _, ptr := range argPtrs {
+		q.freePtr(ctx, ptr)
+	}
+
+	if err != nil {
+		return errors.New("qjs_init_argv failed: " + err.Error())
+	}
+	if int32(initResults[0]) != 0 {
+		return errors.New("qjs_init_argv returned error")
+	}
+
+	// Get the context pointer
+	ctxResults, err := q.qjsGetContext.Call(ctx)
+	if err != nil {
+		return errors.New("qjs_get_context failed: " + err.Error())
+	}
+	q.ctxPtr = uint32(ctxResults[0])
+	if q.ctxPtr == 0 {
+		return errors.New("qjs_get_context returned null")
+	}
+
+	// Get the runtime pointer
+	if q.jsGetRuntime != nil {
+		rtResults, err := q.jsGetRuntime.Call(ctx, uint64(q.ctxPtr))
+		if err == nil && len(rtResults) > 0 {
+			q.rtPtr = uint32(rtResults[0])
+		}
 	}
 
 	return nil
-}
-
-// InitStdModule initializes the QuickJS runtime and loads the std modules as globals.
-// This makes std, os, and bjson available as globals.
-func (q *QuickJS) InitStdModule(ctx context.Context) error {
-	if err := q.Init(ctx); err != nil {
-		return err
-	}
-	return q.Eval(ctx, stdModuleInit, true)
 }
 
 // jsValueIsException checks if a JSValue is an exception
@@ -570,14 +528,8 @@ func (q *QuickJS) RunLoop(ctx context.Context) error {
 // Close destroys the QuickJS runtime and releases resources.
 func (q *QuickJS) Close(ctx context.Context) error {
 	if q.ctxPtr != 0 {
-		q.jsFreeContext.Call(ctx, uint64(q.ctxPtr))
+		q.qjsDestroy.Call(ctx)
 		q.ctxPtr = 0
-	}
-	if q.rtPtr != 0 {
-		if q.jsStdFreeHandlers != nil {
-			q.jsStdFreeHandlers.Call(ctx, uint64(q.rtPtr))
-		}
-		q.jsFreeRuntime.Call(ctx, uint64(q.rtPtr))
 		q.rtPtr = 0
 	}
 	return nil

@@ -238,6 +238,31 @@ const (
 	ExportJSSetModuleExport = "JS_SetModuleExport"
 )
 
+// Reactor mode exports (qjs.c with QJS_WASI_REACTOR)
+// These functions initialize and manage a global QuickJS runtime/context.
+const (
+	// ExportQJSInitArgv initializes the reactor with CLI arguments.
+	// Pass same arguments as CLI: e.g. ["qjs", "--std", "script.js"]
+	// Supported flags:
+	//   --std        Load std, os, bjson modules as globals
+	//   -m, --module Treat script as ES module
+	//   -e, --eval   Evaluate expression
+	//   -I           Include file before script
+	// Signature: qjs_init_argv(argc: i32, argv: i32) -> i32
+	// Returns: 0 on success, -1 on error
+	ExportQJSInitArgv = "qjs_init_argv"
+
+	// ExportQJSGetContext gets the reactor's JSContext.
+	// Use with js_std_loop_once, JS_Eval, etc.
+	// Signature: qjs_get_context() -> i32 (JSContext*)
+	// Returns: JSContext pointer, or NULL if not initialized
+	ExportQJSGetContext = "qjs_get_context"
+
+	// ExportQJSDestroy cleans up the reactor runtime.
+	// Signature: qjs_destroy() -> void
+	ExportQJSDestroy = "qjs_destroy"
+)
+
 // Standard library exports (quickjs-libc.h)
 const (
 	// ExportJSInitModuleStd initializes the 'std' module.

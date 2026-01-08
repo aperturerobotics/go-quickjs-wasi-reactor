@@ -48,12 +48,14 @@ JavaScript runtime lifecycle from the host environment.
 The reactor exports the complete QuickJS C API including:
 
 **Core Runtime:**
+
 - `JS_NewRuntime`, `JS_FreeRuntime` - Runtime lifecycle
 - `JS_NewContext`, `JS_FreeContext` - Context lifecycle
 - `JS_Eval` - Evaluate JavaScript code
 - `JS_Call` - Call JavaScript functions
 
 **Standard Library (quickjs-libc.h):**
+
 - `js_init_module_std`, `js_init_module_os`, `js_init_module_bjson` - Module initialization
 - `js_std_init_handlers`, `js_std_free_handlers` - I/O handler setup
 - `js_std_add_helpers` - Add console.log, print, etc.
@@ -61,6 +63,7 @@ The reactor exports the complete QuickJS C API including:
 - `js_std_poll_io` - Poll for I/O events
 
 **Memory Management:**
+
 - `malloc`, `free`, `realloc`, `calloc` - For host to allocate memory
 
 ## Features
@@ -128,10 +131,10 @@ func main() {
     defer qjs.Close(ctx)
 
     // Option 1: Initialize with CLI args to load script via WASI filesystem
-    qjs.InitArgv(ctx, []string{"qjs", "--std", "scripts/main.js"})
+    qjs.Init(ctx, []string{"qjs", "--std", "scripts/main.js"})
 
-    // Option 2: Initialize with std module and eval code directly
-    // qjs.InitStdModule(ctx)
+    // Option 2: Initialize with --std and eval code directly
+    // qjs.Init(ctx, []string{"qjs", "--std"})
     // qjs.Eval(ctx, `console.log("Hello from QuickJS!");`, false)
 
     // Run event loop until idle
@@ -141,19 +144,17 @@ func main() {
 
 ### Initialization Options
 
-There are three ways to initialize QuickJS:
-
 ```go
-// Option 1: Init() - Basic runtime with std modules available for import
-qjs.Init(ctx)
+// Basic runtime with std modules available for import
+qjs.Init(ctx, nil)
 qjs.Eval(ctx, `import * as std from 'qjs:std'; std.printf("Hello\n")`, true)
 
-// Option 2: InitStdModule() - Like Init() but exposes std, os, bjson as globals
-qjs.InitStdModule(ctx)
+// With --std flag to expose std, os, bjson as globals
+qjs.Init(ctx, []string{"qjs", "--std"})
 qjs.Eval(ctx, `std.printf("Hello\n")`, false)  // std is already global
 
-// Option 3: InitArgv(args) - Like Init() but sets up scriptArgs
-qjs.InitArgv(ctx, []string{"qjs", "script.js", "--verbose"})
+// With script args accessible via scriptArgs global
+qjs.Init(ctx, []string{"qjs", "script.js", "--verbose"})
 qjs.Eval(ctx, `console.log(scriptArgs)`, false)  // ['qjs', 'script.js', '--verbose']
 ```
 
@@ -168,7 +169,7 @@ for {
     if err != nil {
         return err
     }
-    
+
     switch {
     case result == quickjs.LoopIdle:
         // No pending work - done
@@ -227,6 +228,7 @@ QUICKJS_DIR=/path/to/quickjs ./update-quickjs.bash
 ```
 
 This script will:
+
 1. Read the current branch and commit from your local quickjs checkout
 2. Copy the `qjs-wasi-reactor.wasm` file
 3. Generate version information constants

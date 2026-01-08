@@ -42,7 +42,7 @@ func TestRunJavaScriptFile(t *testing.T) {
 	defer qjs.Close(ctx)
 
 	// Initialize with std module (provides std, os, bjson globals)
-	if err := qjs.InitStdModule(ctx); err != nil {
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
@@ -99,7 +99,7 @@ func TestSimpleEval(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -136,7 +136,7 @@ func TestLoopOnce(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -174,8 +174,8 @@ func TestStdModule(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	// Use InitStdModule instead of Init
-	if err := qjs.InitStdModule(ctx); err != nil {
+	// Use Init with --std flag
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
@@ -226,8 +226,8 @@ func TestSetTimeout(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	// Use InitStdModule to get os.setTimeout
-	if err := qjs.InitStdModule(ctx); err != nil {
+	// Use Init with --std to get os.setTimeout
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
@@ -261,7 +261,7 @@ func TestSetTimeout(t *testing.T) {
 	}
 }
 
-func TestInitArgvWithStd(t *testing.T) {
+func TestInitWithStd(t *testing.T) {
 	ctx := context.Background()
 
 	r := wazero.NewRuntime(ctx)
@@ -280,7 +280,7 @@ func TestInitArgvWithStd(t *testing.T) {
 	defer qjs.Close(ctx)
 
 	// Initialize with std module to make std/os available globally
-	if err := qjs.InitStdModule(ctx); err != nil {
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
@@ -328,8 +328,8 @@ func TestWASIEnvVars(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	// Use InitStdModule to get std.getenv
-	if err := qjs.InitStdModule(ctx); err != nil {
+	// Use Init with --std to get std.getenv
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
@@ -379,7 +379,7 @@ func TestContextCancellation(t *testing.T) {
 	}
 	defer qjs.Close(context.Background())
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -541,7 +541,7 @@ func TestStdinReadHandler(t *testing.T) {
 	defer qjs.Close(context.Background())
 
 	// Initialize with std module to get os.setReadHandler
-	if err := qjs.InitStdModule(ctx); err != nil {
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
@@ -718,7 +718,7 @@ func TestESModuleEval(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -778,7 +778,7 @@ func TestPromiseChaining(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -866,7 +866,7 @@ func TestAsyncAwait(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -961,7 +961,7 @@ func TestEvalWithFilename(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -1013,7 +1013,7 @@ func TestSyntaxError(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -1046,7 +1046,7 @@ func TestRuntimeError(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -1086,7 +1086,7 @@ func TestRuntimeError(t *testing.T) {
 			}
 			defer qjs.Close(ctx)
 
-			if err := qjs.Init(ctx); err != nil {
+			if err := qjs.Init(ctx, nil); err != nil {
 				t.Fatalf("failed to init QuickJS: %v", err)
 			}
 
@@ -1133,7 +1133,7 @@ func TestPreCompiledModuleReuse(t *testing.T) {
 			t.Fatalf("instance %d: failed to create QuickJS: %v", i, err)
 		}
 
-		if err := qjs.Init(ctx); err != nil {
+		if err := qjs.Init(ctx, nil); err != nil {
 			qjs.Close(ctx)
 			r.Close(ctx)
 			t.Fatalf("instance %d: failed to init QuickJS: %v", i, err)
@@ -1182,7 +1182,7 @@ func TestMultipleEvals(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -1250,7 +1250,7 @@ func TestSetInterval(t *testing.T) {
 	}
 	defer qjs.Close(context.Background())
 
-	if err := qjs.InitStdModule(ctx); err != nil {
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
@@ -1319,7 +1319,7 @@ func TestClearTimeout(t *testing.T) {
 	}
 	defer qjs.Close(context.Background())
 
-	if err := qjs.InitStdModule(ctx); err != nil {
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
@@ -1397,7 +1397,7 @@ func TestContextTimeout(t *testing.T) {
 	}
 	defer qjs.Close(context.Background())
 
-	if err := qjs.InitStdModule(ctx); err != nil {
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
@@ -1446,7 +1446,7 @@ func TestLoopOnceReturnValues(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.InitStdModule(ctx); err != nil {
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -1535,7 +1535,7 @@ func TestLargeCodeEval(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -1602,7 +1602,7 @@ func TestBigIntSupport(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -1677,7 +1677,7 @@ func TestTypedArrays(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -1762,7 +1762,7 @@ func TestJSONOperations(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -1848,7 +1848,7 @@ func TestGeneratorsAndIterators(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -1954,7 +1954,7 @@ func TestWeakMapAndWeakSet(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -2046,7 +2046,7 @@ func TestProxyAndReflect(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -2150,7 +2150,7 @@ func TestSymbols(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -2237,7 +2237,7 @@ func TestClasses(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -2373,7 +2373,7 @@ func TestRegExpAdvanced(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -2475,7 +2475,7 @@ func TestClosuresAndScoping(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -2588,8 +2588,8 @@ func TestBjsonModule(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	// Use InitStdModule to get bjson
-	if err := qjs.InitStdModule(ctx); err != nil {
+	// Use Init with --std to get bjson
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS with std module: %v", err)
 	}
 
@@ -2662,8 +2662,8 @@ func TestBjsonModule(t *testing.T) {
 	}
 }
 
-// TestInitArgvEmptyArgs tests InitArgv with empty arguments (should call Init)
-func TestInitArgvEmptyArgs(t *testing.T) {
+// TestInitEmptyArgs tests Init with empty arguments
+func TestInitEmptyArgs(t *testing.T) {
 	ctx := context.Background()
 
 	r := wazero.NewRuntime(ctx)
@@ -2681,8 +2681,8 @@ func TestInitArgvEmptyArgs(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	// Empty args should fall back to Init
-	if err := qjs.InitArgv(ctx, []string{}); err != nil {
+	// Empty args should use default "qjs"
+	if err := qjs.Init(ctx, []string{}); err != nil {
 		t.Fatalf("failed to init with empty args: %v", err)
 	}
 
@@ -2720,7 +2720,7 @@ func TestEmptyCodeEval(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -2763,7 +2763,7 @@ func TestSpecialValues(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.Init(ctx); err != nil {
+	if err := qjs.Init(ctx, nil); err != nil {
 		t.Fatalf("failed to init QuickJS: %v", err)
 	}
 
@@ -2857,8 +2857,8 @@ func TestConsoleMethods(t *testing.T) {
 	}
 	defer qjs.Close(ctx)
 
-	// Use InitArgv with --std to get full console support
-	if err := qjs.InitArgv(ctx, []string{"qjs", "--std"}); err != nil {
+	// Use Init with --std to get full console support
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
 		t.Fatalf("failed to init QuickJS with --std: %v", err)
 	}
 

@@ -22,10 +22,10 @@ func main() {
 	}
 	defer qjs.Close(ctx)
 
-	if err := qjs.InitStdModule(ctx); err != nil {
-		log.Fatal("InitStdModule:", err)
+	if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
+		log.Fatal("Init:", err)
 	}
-	fmt.Println("InitStdModule OK")
+	fmt.Println("Init OK")
 
 	if err := qjs.Eval(ctx, `console.log("hello");`, false); err != nil {
 		log.Fatal("Eval:", err)

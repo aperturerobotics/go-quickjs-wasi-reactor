@@ -38,8 +38,8 @@ func main() {
     }
     defer qjs.Close(ctx)
 
-    // Initialize with std module (provides std, os, bjson globals)
-    if err := qjs.InitStdModule(ctx); err != nil {
+    // Initialize with --std flag (provides std, os, bjson globals)
+    if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
         panic(err)
     }
 
@@ -89,7 +89,7 @@ func main() {
     defer qjs.Close(ctx)
 
     // Initialize and set up scriptArgs
-    if err := qjs.InitArgv(ctx, []string{"qjs", "scripts/main.js"}); err != nil {
+    if err := qjs.Init(ctx, []string{"qjs", "scripts/main.js"}); err != nil {
         panic(err)
     }
 
@@ -137,7 +137,7 @@ func main() {
     }
     defer qjs.Close(ctx)
 
-    qjs.InitStdModule(ctx)
+    qjs.Init(ctx, []string{"qjs", "--std"})
     qjs.Eval(ctx, `os.setTimeout(() => console.log("timer!"), 100)`, false)
 
     // Manual event loop - host has full control
@@ -168,20 +168,11 @@ func main() {
 
 Creates a new QuickJS instance. The `config` parameter configures stdin, stdout, stderr, and filesystem access.
 
-### `(*QuickJS) Init(ctx) error`
+### `(*QuickJS) Init(ctx, args) error`
 
-Initializes the QuickJS runtime and context with std modules available for import.
-Modules `qjs:std`, `qjs:os`, and `qjs:bjson` can be imported in evaluated code.
+Initializes the QuickJS runtime and context. Modules `qjs:std`, `qjs:os`, and `qjs:bjson` can be imported in evaluated code.
 
-### `(*QuickJS) InitStdModule(ctx) error`
-
-Like `Init()` but also exposes `std`, `os`, and `bjson` as global objects.
-Convenient for REPL-style usage where you want immediate access to the std library.
-
-### `(*QuickJS) InitArgv(ctx, args) error`
-
-Like `Init()` but also sets up `scriptArgs` global with the provided arguments.
-Use this when your JavaScript code needs to access command-line arguments.
+Pass `nil` or empty slice for default initialization. Pass `[]string{"qjs", "--std"}` to expose `std`, `os`, and `bjson` as globals.
 
 ### `(*QuickJS) Eval(ctx, code, isModule) error`
 
@@ -194,6 +185,7 @@ Evaluates JavaScript code with a custom filename for error messages.
 ### `(*QuickJS) LoopOnce(ctx) (LoopResult, error)`
 
 Runs one iteration of the event loop. Returns:
+
 - `> 0`: next timer fires in N milliseconds
 - `0`: more microtasks pending, call again immediately
 - `LoopIdle (-1)`: no pending work
@@ -249,4 +241,4 @@ callbacks will never fire.
 - `setTimeout` and `setInterval` are on the `os` module, not global (use `os.setTimeout()`)
 - The std module provides environment variable access via `std.getenv()`, `std.setenv()`, etc.
 - Promises work out of the box; `RunLoop` will wait for all pending promises
-- Use `InitStdModule()` for std/os/bjson globals, or `Init()` and import them manually
+- Use `Init(ctx, []string{"qjs", "--std"})` for std/os/bjson globals, or `Init(ctx, nil)` and import them manually
