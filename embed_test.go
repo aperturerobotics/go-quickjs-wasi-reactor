@@ -29,9 +29,7 @@ func TestVersionInfo(t *testing.T) {
 		t.Error("Version should not be empty")
 	}
 
-	// Note: DownloadURL may be empty for local builds
 	t.Logf("Version: %s", Version)
-	t.Logf("GitCommit: %s", GitCommit)
 	if DownloadURL != "" {
 		t.Logf("DownloadURL: %s", DownloadURL)
 	}
