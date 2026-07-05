@@ -1,13 +1,11 @@
 # go-quickjs-wasi-reactor
 
-[![GoDoc Widget]][GoDoc] [![Go Report Card Widget]][Go Report Card]
+[![GoDoc Widget]][GoDoc]
 
 > A Go module that embeds the QuickJS-NG WASI WebAssembly runtime (reactor model).
 
 [GoDoc]: https://godoc.org/github.com/aperturerobotics/go-quickjs-wasi-reactor
 [GoDoc Widget]: https://godoc.org/github.com/aperturerobotics/go-quickjs-wasi-reactor?status.svg
-[Go Report Card Widget]: https://goreportcard.com/badge/github.com/aperturerobotics/go-quickjs-wasi-reactor
-[Go Report Card]: https://goreportcard.com/report/github.com/aperturerobotics/go-quickjs-wasi-reactor
 
 ## Related Projects
 
