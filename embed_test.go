@@ -30,7 +30,7 @@ func TestVersionInfo(t *testing.T) {
 	}
 
 	t.Logf("Version: %s", Version)
-	if DownloadURL != "" {
-		t.Logf("DownloadURL: %s", DownloadURL)
+	if SourceURL != "" {
+		t.Logf("SourceURL: %s", SourceURL)
 	}
 }

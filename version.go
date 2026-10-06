@@ -4,6 +4,10 @@ package quickjswasi
 const (
 	// Version is the QuickJS-NG reactor version
 	Version = "v0.15.1"
-	// DownloadURL is the URL where this WASM file was downloaded from
-	DownloadURL = "https://github.com/quickjs-ng/quickjs/releases/download/v0.15.1/qjs-wasi-reactor.wasm"
+	// SourceURL is the source tree this WASM file was built from
+	SourceURL = "https://github.com/quickjs-ng/quickjs/tree/v0.15.1"
+	// WasiSDKVersion is the wasi-sdk release that built this WASM file
+	WasiSDKVersion = "29"
+	// StackSize is the WASM shadow stack size in bytes
+	StackSize = 8388608
 )
