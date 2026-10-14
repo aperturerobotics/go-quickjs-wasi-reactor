@@ -9,6 +9,10 @@ set -euo pipefail
 # releases export only the wasi entry points instead of the QuickJS C API.
 # This build reserves an 8 MiB stack below the data segment so an overflow
 # traps instead of corrupting memory.
+#
+# QuickJS-NG v0.16 and later give the C API default visibility only when
+# BUILDING_QJS_SHARED is set, so the reactor defines it to export that API.
+# quickjs-ng/quickjs#1804 moves this into the reactor target upstream.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="quickjs-ng/quickjs"
@@ -51,6 +55,7 @@ cmake -S "$WORK_DIR/quickjs" -B "$WORK_DIR/build" \
     -DCMAKE_TOOLCHAIN_FILE="$WORK_DIR/$SDK_NAME/share/cmake/wasi-sdk.cmake" \
     -DQJS_BUILD_WERROR=ON \
     -DQJS_WASI_REACTOR=ON \
+    -DCMAKE_C_FLAGS="-DBUILDING_QJS_SHARED" \
     -DCMAKE_EXE_LINKER_FLAGS="-Wl,-z,stack-size=$STACK_SIZE -Wl,--stack-first" >/dev/null
 cmake --build "$WORK_DIR/build" --target qjs_wasi -j"$(( $(getconf _NPROCESSORS_ONLN) / 2 > 1 ? $(getconf _NPROCESSORS_ONLN) / 2 : 1 ))" >/dev/null
 cp "$WORK_DIR/build/qjs.wasm" "$SCRIPT_DIR/$OUTPUT_NAME"

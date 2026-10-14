@@ -1627,6 +1627,10 @@ func TestBigIntSupport(t *testing.T) {
 		// Test BigInt division (floors)
 		const div = 10n / 3n;
 		console.log("10n / 3n:", div.toString());
+
+		// Test two's complement wrapping of negative values
+		console.log("asUintN 64:", BigInt.asUintN(64, -1n).toString(16));
+		console.log("asUintN 32:", BigInt.asUintN(32, -1n).toString(16));
 	`
 	if err := qjs.Eval(ctx, code, false); err != nil {
 		t.Fatalf("failed to eval: %v", err)
@@ -1646,6 +1650,8 @@ func TestBigIntSupport(t *testing.T) {
 		"bigint from number: true",
 		"2^64: 18446744073709551616",
 		"10n / 3n: 3",
+		"asUintN 64: ffffffffffffffff",
+		"asUintN 32: ffffffff",
 	}
 
 	for _, pattern := range expectedPatterns {
