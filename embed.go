@@ -147,6 +147,22 @@ const (
 	ExportJSFreeValue = "JS_FreeValue"
 )
 
+// Bytecode exports
+const (
+	// ExportJSWriteObject serializes a value, such as a compiled module, to bytes.
+	// The caller frees the result with js_free.
+	// Signature: JS_WriteObject(ctx: i32, psize: i32, obj: i64, flags: i32) -> i32 (uint8_t*)
+	ExportJSWriteObject = "JS_WriteObject"
+
+	// ExportJSReadObject deserializes a value written by JS_WriteObject.
+	// Signature: JS_ReadObject(ctx: i32, buf: i32, buf_len: i32, flags: i32) -> i64 (JSValue)
+	ExportJSReadObject = "JS_ReadObject"
+
+	// ExportJSFree frees memory allocated by the context allocator.
+	// Signature: js_free(ctx: i32, ptr: i32) -> void
+	ExportJSFree = "js_free"
+)
+
 // Property exports
 const (
 	// ExportJSGetPropertyStr gets a property by string key.
@@ -320,8 +336,8 @@ const (
 	// Signature: js_std_dump_error(ctx: i32) -> void
 	ExportJSStdDumpError = "js_std_dump_error"
 
-	// ExportJSStdEvalBinary evaluates bytecode.
-	// Signature: js_std_eval_binary(ctx: i32, buf: i32, buf_len: i64, flags: i32) -> void
+	// ExportJSStdEvalBinary evaluates bytecode, exiting the process on an exception.
+	// Signature: js_std_eval_binary(ctx: i32, buf: i32, buf_len: i32, load_only: i32) -> void
 	ExportJSStdEvalBinary = "js_std_eval_binary"
 
 	// ExportJSLoadFile loads a file into memory.
@@ -348,6 +364,18 @@ const (
 	JSEvalFlagStrict    = 1 << 3 // force 'use strict'
 	JSEvalFlagCompile   = 1 << 5 // compile only, do not run
 	JSEvalFlagBacktrace = 1 << 6 // enable backtrace
+)
+
+// JS_WRITE_OBJ_* flags for JS_WriteObject
+const (
+	JSWriteObjBytecode    = 1 << 0 // allow function and module
+	JSWriteObjStripSource = 1 << 4 // omit function source code
+	JSWriteObjStripDebug  = 1 << 5 // omit debug information
+)
+
+// JS_READ_OBJ_* flags for JS_ReadObject
+const (
+	JSReadObjBytecode = 1 << 0 // allow function and module, trusted input only
 )
 
 // Loop result constants from js_std_loop_once()

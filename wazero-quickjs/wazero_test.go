@@ -1161,6 +1161,58 @@ func TestPreCompiledModuleReuse(t *testing.T) {
 }
 
 // TestMultipleEvals tests calling Eval multiple times on the same instance
+// TestModuleBytecode compiles a module in one instance and imports it from
+// its bytecode in a fresh instance that has no source file to load.
+func TestModuleBytecode(t *testing.T) {
+	ctx := context.Background()
+
+	// newInstance creates an initialized instance writing to stdout.
+	newInstance := func(stdout io.Writer) *QuickJS {
+		r := wazero.NewRuntime(ctx)
+		t.Cleanup(func() { _ = r.Close(ctx) })
+		config := wazero.NewModuleConfig().WithStdout(stdout).WithStderr(stdout)
+		qjs, err := NewQuickJS(ctx, r, config)
+		if err != nil {
+			t.Fatalf("failed to create QuickJS: %v", err)
+		}
+		t.Cleanup(func() { _ = qjs.Close(ctx) })
+		if err := qjs.Init(ctx, []string{"qjs", "--std"}); err != nil {
+			t.Fatalf("failed to init QuickJS: %v", err)
+		}
+		return qjs
+	}
+
+	// Compile the module to bytecode.
+	var compileOut bytes.Buffer
+	const src = "export const answer = 6 * 7;\nexport const url = import.meta.url;\n"
+	bytecode, err := newInstance(&compileOut).CompileModule(ctx, src, "/lib/answer.mjs")
+	if err != nil {
+		t.Fatalf("compile: %v\n%s", err, compileOut.String())
+	}
+
+	// Load the bytecode into a fresh instance and import it by name.
+	var stdout bytes.Buffer
+	qjs := newInstance(&stdout)
+	if err := qjs.LoadModule(ctx, bytecode); err != nil {
+		t.Fatalf("load: %v\n%s", err, stdout.String())
+	}
+	main := "import { answer, url } from '/lib/answer.mjs';\nprint(answer, url);\n"
+	if err := qjs.Eval(ctx, main, true); err != nil {
+		t.Fatalf("eval: %v\n%s", err, stdout.String())
+	}
+	if err := qjs.RunLoop(ctx); err != nil {
+		t.Fatalf("run loop: %v", err)
+	}
+	if got, want := stdout.String(), "42 file:///lib/answer.mjs\n"; got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+
+	// Reject bytecode that is not a module.
+	if err := qjs.LoadModule(ctx, []byte{0}); err == nil {
+		t.Fatal("expected an error loading invalid bytecode")
+	}
+}
+
 func TestMultipleEvals(t *testing.T) {
 	ctx := context.Background()
 

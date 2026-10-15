@@ -3,6 +3,7 @@
 package quickjs
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -34,6 +35,11 @@ type QuickJS struct {
 
 	// Evaluation
 	jsEval api.Function
+
+	// Bytecode
+	jsWriteObject api.Function
+	jsReadObject  api.Function
+	jsFree        api.Function
 
 	// Value management
 	jsFreeValue       api.Function
@@ -144,6 +150,11 @@ func NewQuickJSWithModule(ctx context.Context, r wazero.Runtime, compiled wazero
 
 		// Evaluation
 		jsEval: mod.ExportedFunction(quickjswasi.ExportJSEval),
+
+		// Bytecode
+		jsWriteObject: mod.ExportedFunction(quickjswasi.ExportJSWriteObject),
+		jsReadObject:  mod.ExportedFunction(quickjswasi.ExportJSReadObject),
+		jsFree:        mod.ExportedFunction(quickjswasi.ExportJSFree),
 
 		// Value management
 		jsFreeValue:       mod.ExportedFunction(quickjswasi.ExportJSFreeValue),
@@ -400,16 +411,157 @@ func (q *QuickJS) EvalWithFilename(ctx context.Context, code string, filename st
 	// Check for exception
 	val := evalResults[0]
 	if jsValueIsException(val) {
-		// Dump error to stderr
-		if q.jsStdDumpError != nil {
-			q.jsStdDumpError.Call(ctx, uint64(q.ctxPtr))
-		}
-		return errors.New("JavaScript exception")
+		return q.dumpException(ctx)
 	}
 
 	// Free the result value
 	q.jsFreeValue.Call(ctx, uint64(q.ctxPtr), val)
 
+	return nil
+}
+
+// dumpException writes the pending JavaScript exception to stderr and returns
+// an error standing for it.
+func (q *QuickJS) dumpException(ctx context.Context) error {
+	if q.jsStdDumpError != nil {
+		q.jsStdDumpError.Call(ctx, uint64(q.ctxPtr))
+	}
+	return errors.New("JavaScript exception")
+}
+
+// CompileModule compiles ES module source without evaluating it and returns
+// the module as bytecode. The module stays registered under name, so a later
+// import of name links it instead of loading the file. The bytecode omits the
+// source text but keeps line numbers, and LoadModule registers it again in a
+// later instance of the same reactor build without parsing the source.
+func (q *QuickJS) CompileModule(ctx context.Context, code, name string) ([]byte, error) {
+	if q.ctxPtr == 0 {
+		return nil, errors.New("QuickJS not initialized")
+	}
+	if q.jsWriteObject == nil || q.jsFree == nil || q.jsModuleSetImportMeta == nil {
+		return nil, errors.New("bytecode exports not available")
+	}
+
+	// Compile the module, which registers it under name.
+	codePtr, err := q.allocString(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	defer q.freePtr(ctx, codePtr)
+	namePtr, err := q.allocString(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	defer q.freePtr(ctx, namePtr)
+	evalResults, err := q.jsEval.Call(ctx,
+		uint64(q.ctxPtr),
+		uint64(codePtr),
+		uint64(len(code)),
+		uint64(namePtr),
+		quickjswasi.JSEvalTypeModule|quickjswasi.JSEvalFlagCompile)
+	if err != nil {
+		return nil, err
+	}
+	mod := evalResults[0]
+	if jsValueIsException(mod) {
+		return nil, q.dumpException(ctx)
+	}
+
+	// The context holds the module, so release the returned reference.
+	defer q.jsFreeValue.Call(ctx, uint64(q.ctxPtr), mod)
+	if err := q.setImportMeta(ctx, mod); err != nil {
+		return nil, err
+	}
+
+	// Serialize the module into a buffer owned by the context allocator.
+	sizePtr, err := q.malloc.Call(ctx, 4)
+	if err != nil {
+		return nil, err
+	}
+	defer q.freePtr(ctx, uint32(sizePtr[0]))
+	writeResults, err := q.jsWriteObject.Call(ctx,
+		uint64(q.ctxPtr),
+		sizePtr[0],
+		mod,
+		quickjswasi.JSWriteObjBytecode|quickjswasi.JSWriteObjStripSource)
+	if err != nil {
+		return nil, err
+	}
+	bufPtr := uint32(writeResults[0])
+	if bufPtr == 0 {
+		return nil, q.dumpException(ctx)
+	}
+	defer q.jsFree.Call(ctx, uint64(q.ctxPtr), uint64(bufPtr))
+
+	// Copy the bytecode out of guest memory.
+	mem := q.mod.Memory()
+	size, ok := mem.ReadUint32Le(uint32(sizePtr[0]))
+	if !ok {
+		return nil, errors.New("bytecode size out of range")
+	}
+	buf, ok := mem.Read(bufPtr, size)
+	if !ok {
+		return nil, errors.New("bytecode out of range")
+	}
+	return bytes.Clone(buf), nil
+}
+
+// LoadModule registers a module from bytecode returned by CompileModule,
+// under the name it was compiled with, without evaluating it. A later import
+// of that name links the module. QuickJS does not validate bytecode, so load
+// only bytecode this host wrote with the same reactor build.
+func (q *QuickJS) LoadModule(ctx context.Context, bytecode []byte) error {
+	if q.ctxPtr == 0 {
+		return errors.New("QuickJS not initialized")
+	}
+	if q.jsReadObject == nil || q.jsModuleSetImportMeta == nil {
+		return errors.New("bytecode exports not available")
+	}
+
+	// Copy the bytecode into guest memory.
+	bufResults, err := q.malloc.Call(ctx, uint64(len(bytecode)))
+	if err != nil {
+		return err
+	}
+	bufPtr := uint32(bufResults[0])
+	if bufPtr == 0 {
+		return errors.New("malloc returned null")
+	}
+	defer q.freePtr(ctx, bufPtr)
+	if !q.mod.Memory().Write(bufPtr, bytecode) {
+		return errors.New("failed to write bytecode to memory")
+	}
+
+	// Read the module, which registers it under its name.
+	readResults, err := q.jsReadObject.Call(ctx,
+		uint64(q.ctxPtr),
+		uint64(bufPtr),
+		uint64(len(bytecode)),
+		quickjswasi.JSReadObjBytecode)
+	if err != nil {
+		return err
+	}
+	mod := readResults[0]
+	if jsValueIsException(mod) {
+		return q.dumpException(ctx)
+	}
+	defer q.jsFreeValue.Call(ctx, uint64(q.ctxPtr), mod)
+	if int32(mod>>32) != quickjswasi.JSTagModule {
+		return errors.New("bytecode is not a module")
+	}
+	return q.setImportMeta(ctx, mod)
+}
+
+// setImportMeta sets import.meta.url of a compiled module from its name, as the
+// QuickJS module loader does.
+func (q *QuickJS) setImportMeta(ctx context.Context, mod uint64) error {
+	results, err := q.jsModuleSetImportMeta.Call(ctx, uint64(q.ctxPtr), mod, 0, 0)
+	if err != nil {
+		return err
+	}
+	if int32(results[0]) < 0 {
+		return q.dumpException(ctx)
+	}
 	return nil
 }
 

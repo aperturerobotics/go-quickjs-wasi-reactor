@@ -182,6 +182,14 @@ Evaluates JavaScript code. Set `isModule` to `true` for ES module syntax.
 
 Evaluates JavaScript code with a custom filename for error messages.
 
+### `(*QuickJS) CompileModule(ctx, code, name) ([]byte, error)`
+
+Compiles an ES module without evaluating it and returns its bytecode. The module stays registered under `name`, so a later import of `name` links it. The bytecode omits the source text and keeps line numbers.
+
+### `(*QuickJS) LoadModule(ctx, bytecode) error`
+
+Registers a module from bytecode returned by `CompileModule`, under the name it was compiled with, without parsing its source. A host can cache bytecode to skip parsing large modules at startup. QuickJS does not validate bytecode, so load only bytecode the host wrote with the same reactor build.
+
 ### `(*QuickJS) LoopOnce(ctx) (LoopResult, error)`
 
 Runs one iteration of the event loop. Returns:
