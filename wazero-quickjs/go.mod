@@ -3,7 +3,7 @@ module github.com/aperturerobotics/go-quickjs-wasi-reactor/wazero-quickjs
 go 1.24.4
 
 require (
-	github.com/aperturerobotics/go-quickjs-wasi-reactor v0.15.1 // master
+	github.com/aperturerobotics/go-quickjs-wasi-reactor v0.15.2-0.20261015001203-22f94e89fe8f // master
 	github.com/tetratelabs/wazero v1.12.0
 )
 
