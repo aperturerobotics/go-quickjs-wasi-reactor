@@ -81,6 +81,9 @@ type QuickJS struct {
 	ctxPtr uint32 // JSContext*
 }
 
+// errNotInitialized is returned by a call that needs the context before Init.
+var errNotInitialized = errors.New("QuickJS not initialized")
+
 // CompileQuickJS compiles the embedded QuickJS WASM module.
 // The compiled module can be reused across multiple QuickJS instances for better performance.
 // The caller should also instantiate WASI on the runtime before using the compiled module.
@@ -132,6 +135,7 @@ func NewQuickJSWithModule(ctx context.Context, r wazero.Runtime, compiled wazero
 		}
 	}
 
+	// Look up the exports the API calls.
 	q := &QuickJS{
 		runtime: r,
 		mod:     mod,
@@ -192,52 +196,38 @@ func NewQuickJSWithModule(ctx context.Context, r wazero.Runtime, compiled wazero
 		qjsDestroy:    mod.ExportedFunction(quickjswasi.ExportQJSDestroy),
 	}
 
-	// Validate required exports
-	if q.malloc == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportMalloc)
+	// Fail when the module lacks an export the API always calls.
+	required := []struct {
+		name string
+		fn   api.Function
+	}{
+		{quickjswasi.ExportMalloc, q.malloc},
+		{quickjswasi.ExportFree, q.free},
+		{quickjswasi.ExportJSNewRuntime, q.jsNewRuntime},
+		{quickjswasi.ExportJSFreeRuntime, q.jsFreeRuntime},
+		{quickjswasi.ExportJSNewContext, q.jsNewContext},
+		{quickjswasi.ExportJSFreeContext, q.jsFreeContext},
+		{quickjswasi.ExportJSEval, q.jsEval},
+		{quickjswasi.ExportJSFreeValue, q.jsFreeValue},
+		{quickjswasi.ExportJSStdLoopOnce, q.jsStdLoopOnce},
+		{quickjswasi.ExportQJSInitArgv, q.qjsInitArgv},
+		{quickjswasi.ExportQJSGetContext, q.qjsGetContext},
+		{quickjswasi.ExportQJSDestroy, q.qjsDestroy},
 	}
-	if q.free == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportFree)
+	for _, export := range required {
+		if export.fn == nil {
+			_ = mod.Close(ctx)
+			return nil, errors.New("missing export: " + export.name)
+		}
 	}
-	if q.jsNewRuntime == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportJSNewRuntime)
-	}
-	if q.jsFreeRuntime == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportJSFreeRuntime)
-	}
-	if q.jsNewContext == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportJSNewContext)
-	}
-	if q.jsFreeContext == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportJSFreeContext)
-	}
-	if q.jsEval == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportJSEval)
-	}
-	if q.jsFreeValue == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportJSFreeValue)
-	}
-	if q.jsStdLoopOnce == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportJSStdLoopOnce)
-	}
-	if q.qjsInitArgv == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportQJSInitArgv)
-	}
-	if q.qjsGetContext == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportQJSGetContext)
-	}
-	if q.qjsDestroy == nil {
-		return nil, errors.New("missing export: " + quickjswasi.ExportQJSDestroy)
-	}
-
 	return q, nil
 }
 
-// allocString allocates a null-terminated string in WASM memory and returns the pointer.
-// The caller must free the returned pointer.
-func (q *QuickJS) allocString(ctx context.Context, s string) (uint32, error) {
-	bytes := []byte(s)
-	results, err := q.malloc.Call(ctx, uint64(len(bytes)+1))
+// allocBytes copies data into newly allocated WASM memory and returns the
+// pointer. The caller must free the returned pointer.
+func (q *QuickJS) allocBytes(ctx context.Context, data []byte) (uint32, error) {
+	// Allocate the buffer.
+	results, err := q.malloc.Call(ctx, uint64(len(data)))
 	if err != nil {
 		return 0, err
 	}
@@ -245,11 +235,19 @@ func (q *QuickJS) allocString(ctx context.Context, s string) (uint32, error) {
 	if ptr == 0 {
 		return 0, errors.New("malloc returned null")
 	}
-	if !q.mod.Memory().Write(ptr, append(bytes, 0)) {
-		q.free.Call(ctx, uint64(ptr))
-		return 0, errors.New("failed to write string to memory")
+
+	// Copy the data into it.
+	if !q.mod.Memory().Write(ptr, data) {
+		q.freePtr(ctx, ptr)
+		return 0, errors.New("failed to write to memory")
 	}
 	return ptr, nil
+}
+
+// allocString allocates a null-terminated string in WASM memory and returns the pointer.
+// The caller must free the returned pointer.
+func (q *QuickJS) allocString(ctx context.Context, s string) (uint32, error) {
+	return q.allocBytes(ctx, append([]byte(s), 0))
 }
 
 // freePtr frees a pointer in WASM memory.
@@ -271,61 +269,32 @@ func (q *QuickJS) freePtr(ctx context.Context, ptr uint32) {
 // Example: Init(ctx, []string{"qjs", "--std", "/boot/script.js"})
 // Pass nil for default initialization.
 func (q *QuickJS) Init(ctx context.Context, args []string) error {
+	// Refuse a second initialization.
 	if q.ctxPtr != 0 {
 		return errors.New("QuickJS already initialized")
 	}
 
-	argc := len(args)
-	if argc == 0 {
+	// Copy argv into guest memory, defaulting to the program name.
+	if len(args) == 0 {
 		args = []string{"qjs"}
-		argc = 1
 	}
-
-	// Allocate argv strings
-	argPtrs := make([]uint32, argc)
+	argv := make([]byte, 4*len(args))
 	for i, arg := range args {
 		ptr, err := q.allocString(ctx, arg)
 		if err != nil {
-			for j := 0; j < i; j++ {
-				q.freePtr(ctx, argPtrs[j])
-			}
 			return err
 		}
-		argPtrs[i] = ptr
+		defer q.freePtr(ctx, ptr)
+		binary.LittleEndian.PutUint32(argv[4*i:], ptr)
 	}
-
-	// Allocate argv pointer array
-	argvResults, err := q.malloc.Call(ctx, uint64(argc*4))
+	argvPtr, err := q.allocBytes(ctx, argv)
 	if err != nil {
-		for _, ptr := range argPtrs {
-			q.freePtr(ctx, ptr)
-		}
 		return err
 	}
-	argvPtr := uint32(argvResults[0])
-	if argvPtr == 0 {
-		for _, ptr := range argPtrs {
-			q.freePtr(ctx, ptr)
-		}
-		return errors.New("malloc returned null for argv")
-	}
+	defer q.freePtr(ctx, argvPtr)
 
-	// Write argv pointers
-	for i, ptr := range argPtrs {
-		ptrBytes := make([]byte, 4)
-		binary.LittleEndian.PutUint32(ptrBytes, ptr)
-		q.mod.Memory().Write(argvPtr+uint32(i*4), ptrBytes)
-	}
-
-	// Call qjs_init_argv
-	initResults, err := q.qjsInitArgv.Call(ctx, uint64(argc), uint64(argvPtr))
-
-	// Free argv memory
-	q.freePtr(ctx, argvPtr)
-	for _, ptr := range argPtrs {
-		q.freePtr(ctx, ptr)
-	}
-
+	// Create the runtime and context, running a script named in args.
+	initResults, err := q.qjsInitArgv.Call(ctx, uint64(len(args)), uint64(argvPtr))
 	if err != nil {
 		return errors.New("qjs_init_argv failed: " + err.Error())
 	}
@@ -354,7 +323,7 @@ func (q *QuickJS) Init(ctx context.Context, args []string) error {
 	return nil
 }
 
-// jsValueIsException checks if a JSValue is an exception
+// jsValueIsException checks if a JSValue is an exception.
 func jsValueIsException(val uint64) bool {
 	tag := int32(val >> 32)
 	return tag == quickjswasi.JSTagException
@@ -369,28 +338,38 @@ func (q *QuickJS) Eval(ctx context.Context, code string, isModule bool) error {
 // EvalWithFilename evaluates JavaScript code with a custom filename for error messages.
 // If isModule is true, the code is treated as an ES module.
 func (q *QuickJS) EvalWithFilename(ctx context.Context, code string, filename string, isModule bool) error {
+	// Require an initialized context.
 	if q.ctxPtr == 0 {
-		return errors.New("QuickJS not initialized")
+		return errNotInitialized
 	}
 
-	// Allocate code string (allocString adds null terminator)
-	codePtr, err := q.allocString(ctx, code)
-	if err != nil {
-		return err
-	}
-
-	// Allocate filename string
-	filenamePtr, err := q.allocString(ctx, filename)
-	if err != nil {
-		q.freePtr(ctx, codePtr)
-		return err
-	}
-
-	// Determine eval flags
+	// Evaluate the code and free its result.
 	evalFlags := quickjswasi.JSEvalTypeGlobal
 	if isModule {
 		evalFlags = quickjswasi.JSEvalTypeModule
 	}
+	val, err := q.eval(ctx, code, filename, evalFlags)
+	if err != nil {
+		return err
+	}
+	q.jsFreeValue.Call(ctx, uint64(q.ctxPtr), val)
+	return nil
+}
+
+// eval calls JS_Eval and returns the resulting value, which the caller frees.
+// A JavaScript exception is written to stderr and returned as an error.
+func (q *QuickJS) eval(ctx context.Context, code, filename string, evalFlags int) (uint64, error) {
+	// Copy the code and filename into guest memory.
+	codePtr, err := q.allocString(ctx, code)
+	if err != nil {
+		return 0, err
+	}
+	defer q.freePtr(ctx, codePtr)
+	filenamePtr, err := q.allocString(ctx, filename)
+	if err != nil {
+		return 0, err
+	}
+	defer q.freePtr(ctx, filenamePtr)
 
 	// Call JS_Eval(ctx, input, input_len, filename, eval_flags) -> JSValue
 	evalResults, err := q.jsEval.Call(ctx,
@@ -399,25 +378,14 @@ func (q *QuickJS) EvalWithFilename(ctx context.Context, code string, filename st
 		uint64(len(code)),
 		uint64(filenamePtr),
 		uint64(evalFlags))
-
-	// Free allocated memory
-	q.freePtr(ctx, codePtr)
-	q.freePtr(ctx, filenamePtr)
-
 	if err != nil {
-		return err
+		return 0, err
 	}
-
-	// Check for exception
 	val := evalResults[0]
 	if jsValueIsException(val) {
-		return q.dumpException(ctx)
+		return 0, q.dumpException(ctx)
 	}
-
-	// Free the result value
-	q.jsFreeValue.Call(ctx, uint64(q.ctxPtr), val)
-
-	return nil
+	return val, nil
 }
 
 // dumpException writes the pending JavaScript exception to stderr and returns
@@ -435,53 +403,34 @@ func (q *QuickJS) dumpException(ctx context.Context) error {
 // source text but keeps line numbers, and LoadModule registers it again in a
 // later instance of the same reactor build without parsing the source.
 func (q *QuickJS) CompileModule(ctx context.Context, code, name string) ([]byte, error) {
+	// Require an initialized context and the bytecode exports.
 	if q.ctxPtr == 0 {
-		return nil, errors.New("QuickJS not initialized")
+		return nil, errNotInitialized
 	}
 	if q.jsWriteObject == nil || q.jsFree == nil || q.jsModuleSetImportMeta == nil {
 		return nil, errors.New("bytecode exports not available")
 	}
 
-	// Compile the module, which registers it under name.
-	codePtr, err := q.allocString(ctx, code)
+	// Compile the module, which registers it under name. The context holds
+	// the module, so release the returned reference.
+	mod, err := q.eval(ctx, code, name, quickjswasi.JSEvalTypeModule|quickjswasi.JSEvalFlagCompile)
 	if err != nil {
 		return nil, err
 	}
-	defer q.freePtr(ctx, codePtr)
-	namePtr, err := q.allocString(ctx, name)
-	if err != nil {
-		return nil, err
-	}
-	defer q.freePtr(ctx, namePtr)
-	evalResults, err := q.jsEval.Call(ctx,
-		uint64(q.ctxPtr),
-		uint64(codePtr),
-		uint64(len(code)),
-		uint64(namePtr),
-		quickjswasi.JSEvalTypeModule|quickjswasi.JSEvalFlagCompile)
-	if err != nil {
-		return nil, err
-	}
-	mod := evalResults[0]
-	if jsValueIsException(mod) {
-		return nil, q.dumpException(ctx)
-	}
-
-	// The context holds the module, so release the returned reference.
 	defer q.jsFreeValue.Call(ctx, uint64(q.ctxPtr), mod)
 	if err := q.setImportMeta(ctx, mod); err != nil {
 		return nil, err
 	}
 
 	// Serialize the module into a buffer owned by the context allocator.
-	sizePtr, err := q.malloc.Call(ctx, 4)
+	sizePtr, err := q.allocBytes(ctx, make([]byte, 4))
 	if err != nil {
 		return nil, err
 	}
-	defer q.freePtr(ctx, uint32(sizePtr[0]))
+	defer q.freePtr(ctx, sizePtr)
 	writeResults, err := q.jsWriteObject.Call(ctx,
 		uint64(q.ctxPtr),
-		sizePtr[0],
+		uint64(sizePtr),
 		mod,
 		quickjswasi.JSWriteObjBytecode|quickjswasi.JSWriteObjStripSource)
 	if err != nil {
@@ -495,7 +444,7 @@ func (q *QuickJS) CompileModule(ctx context.Context, code, name string) ([]byte,
 
 	// Copy the bytecode out of guest memory.
 	mem := q.mod.Memory()
-	size, ok := mem.ReadUint32Le(uint32(sizePtr[0]))
+	size, ok := mem.ReadUint32Le(sizePtr)
 	if !ok {
 		return nil, errors.New("bytecode size out of range")
 	}
@@ -511,26 +460,20 @@ func (q *QuickJS) CompileModule(ctx context.Context, code, name string) ([]byte,
 // of that name links the module. QuickJS does not validate bytecode, so load
 // only bytecode this host wrote with the same reactor build.
 func (q *QuickJS) LoadModule(ctx context.Context, bytecode []byte) error {
+	// Require an initialized context and the bytecode exports.
 	if q.ctxPtr == 0 {
-		return errors.New("QuickJS not initialized")
+		return errNotInitialized
 	}
 	if q.jsReadObject == nil || q.jsModuleSetImportMeta == nil {
 		return errors.New("bytecode exports not available")
 	}
 
 	// Copy the bytecode into guest memory.
-	bufResults, err := q.malloc.Call(ctx, uint64(len(bytecode)))
+	bufPtr, err := q.allocBytes(ctx, bytecode)
 	if err != nil {
 		return err
 	}
-	bufPtr := uint32(bufResults[0])
-	if bufPtr == 0 {
-		return errors.New("malloc returned null")
-	}
 	defer q.freePtr(ctx, bufPtr)
-	if !q.mod.Memory().Write(bufPtr, bytecode) {
-		return errors.New("failed to write bytecode to memory")
-	}
 
 	// Read the module, which registers it under its name.
 	readResults, err := q.jsReadObject.Call(ctx,
@@ -590,16 +533,20 @@ func (r LoopResult) NextTimerMs() int {
 }
 
 // LoopOnce runs one iteration of the QuickJS event loop.
-// Returns:
+//
+// The result means:
+//
 //   - LoopResult > 0: next timer fires in N ms
 //   - LoopResult == 0: more microtasks pending, call again immediately
 //   - LoopIdle (-1): no pending work
 //   - LoopError (-2): error occurred
 func (q *QuickJS) LoopOnce(ctx context.Context) (LoopResult, error) {
+	// Require an initialized context.
 	if q.ctxPtr == 0 {
-		return LoopError, errors.New("QuickJS not initialized")
+		return LoopError, errNotInitialized
 	}
 
+	// Run one iteration.
 	results, err := q.jsStdLoopOnce.Call(ctx, uint64(q.ctxPtr))
 	if err != nil {
 		return LoopError, err
@@ -625,12 +572,15 @@ func (q *QuickJS) LoopOnce(ctx context.Context) (LoopResult, error) {
 //   - -1: error or no I/O handlers
 //   - -2: not initialized or exception in handler
 func (q *QuickJS) PollIO(ctx context.Context, timeoutMs int32) (int32, error) {
+	// Require an initialized context and the poll export.
 	if q.ctxPtr == 0 {
-		return -2, errors.New("QuickJS not initialized")
+		return -2, errNotInitialized
 	}
 	if q.jsStdPollIO == nil {
 		return -1, errors.New("js_std_poll_io not available")
 	}
+
+	// Poll and run the ready handlers.
 	results, err := q.jsStdPollIO.Call(ctx, uint64(q.ctxPtr), uint64(timeoutMs))
 	if err != nil {
 		return -2, err
