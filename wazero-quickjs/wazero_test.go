@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -1210,6 +1211,79 @@ func TestModuleBytecode(t *testing.T) {
 	// Reject bytecode that is not a module.
 	if err := qjs.LoadModule(ctx, []byte{0}); err == nil {
 		t.Fatal("expected an error loading invalid bytecode")
+	}
+}
+
+func TestInterruptBudget(t *testing.T) {
+	ctx := context.Background()
+
+	// newInstance creates an initialized instance with an interrupt budget.
+	newInstance := func(checks int64) (*QuickJS, *bytes.Buffer) {
+		r := wazero.NewRuntime(ctx)
+		t.Cleanup(func() { _ = r.Close(ctx) })
+		var stdout bytes.Buffer
+		config := wazero.NewModuleConfig().WithStdout(&stdout).WithStderr(&stdout)
+		qjs, err := NewQuickJS(ctx, r, config)
+		if err != nil {
+			t.Fatalf("failed to create QuickJS: %v", err)
+		}
+		t.Cleanup(func() { _ = qjs.Close(ctx) })
+		if err := qjs.Init(ctx, nil); err != nil {
+			t.Fatalf("failed to init QuickJS: %v", err)
+		}
+		if err := qjs.SetInterruptBudget(ctx, checks); err != nil {
+			t.Fatalf("set budget: %v", err)
+		}
+		return qjs, &stdout
+	}
+
+	// A short loop passes within the budget and leaves checks over.
+	const loop = "let n = 0; for (let i = 0; i < %d; i++) { n += i; } print(n);"
+	qjs, stdout := newInstance(100)
+	if err := qjs.Eval(ctx, fmt.Sprintf(loop, 1000), false); err != nil {
+		t.Fatalf("short loop: %v\n%s", err, stdout.String())
+	}
+	left, err := qjs.InterruptBudget(ctx)
+	if err != nil {
+		t.Fatalf("budget: %v", err)
+	}
+	if left <= 0 || left > 100 {
+		t.Fatalf("budget left = %d, want between 1 and 100", left)
+	}
+
+	// An endless loop stops with the budget spent, even inside try.
+	qjs, stdout = newInstance(100)
+	err = qjs.Eval(ctx, "try { for (;;) {} } catch (e) { print('caught'); }", false)
+	if err == nil {
+		t.Fatal("expected the endless loop to be interrupted")
+	}
+	if strings.Contains(stdout.String(), "caught") {
+		t.Fatalf("interrupt was caught: %s", stdout.String())
+	}
+	if left, _ := qjs.InterruptBudget(ctx); left != 0 {
+		t.Fatalf("budget left = %d, want 0", left)
+	}
+
+	// The same work spends the same budget in a fresh instance.
+	spent := func() int64 {
+		qjs, stdout := newInstance(1 << 20)
+		if err := qjs.Eval(ctx, fmt.Sprintf(loop, 1000000), false); err != nil {
+			t.Fatalf("long loop: %v\n%s", err, stdout.String())
+		}
+		left, _ := qjs.InterruptBudget(ctx)
+		return 1<<20 - left
+	}
+	if a, b := spent(), spent(); a != b || a == 0 {
+		t.Fatalf("spent %d then %d checks, want the same nonzero count", a, b)
+	}
+
+	// A negative budget removes the limit.
+	qjs, stdout = newInstance(-1)
+	if err := qjs.Eval(ctx, fmt.Sprintf(loop, 1000000), false); err != nil {
+		t.Fatalf("unlimited loop: %v\n%s", err, stdout.String())
+	}
+	if left, _ := qjs.InterruptBudget(ctx); left != -1 {
+		t.Fatalf("budget left = %d, want -1", left)
 	}
 }
 

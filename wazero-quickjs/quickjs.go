@@ -76,6 +76,10 @@ type QuickJS struct {
 	qjsGetContext api.Function
 	qjsDestroy    api.Function
 
+	// Interrupt budget exports
+	qjsSetInterruptBudget api.Function
+	qjsGetInterruptBudget api.Function
+
 	// Runtime state (managed by QuickJS struct)
 	rtPtr  uint32 // JSRuntime*
 	ctxPtr uint32 // JSContext*
@@ -194,6 +198,10 @@ func NewQuickJSWithModule(ctx context.Context, r wazero.Runtime, compiled wazero
 		qjsInitArgv:   mod.ExportedFunction(quickjswasi.ExportQJSInitArgv),
 		qjsGetContext: mod.ExportedFunction(quickjswasi.ExportQJSGetContext),
 		qjsDestroy:    mod.ExportedFunction(quickjswasi.ExportQJSDestroy),
+
+		// Interrupt budget
+		qjsSetInterruptBudget: mod.ExportedFunction(quickjswasi.ExportQJSSetInterruptBudget),
+		qjsGetInterruptBudget: mod.ExportedFunction(quickjswasi.ExportQJSGetInterruptBudget),
 	}
 
 	// Fail when the module lacks an export the API always calls.
@@ -321,6 +329,43 @@ func (q *QuickJS) Init(ctx context.Context, args []string) error {
 	}
 
 	return nil
+}
+
+// SetInterruptBudget sets the number of interrupt checks the runtime may pass
+// before it throws an uncatchable "interrupted" error, or -1 for no limit.
+// QuickJS checks every 10000 bytecode branches and calls, so the budget bounds
+// a run by a count of operations that is the same on every host.
+func (q *QuickJS) SetInterruptBudget(ctx context.Context, checks int64) error {
+	// Require an initialized context and the budget exports.
+	if q.ctxPtr == 0 {
+		return errNotInitialized
+	}
+	if q.qjsSetInterruptBudget == nil {
+		return errors.New("interrupt budget exports not available")
+	}
+
+	// Install the budget.
+	results, err := q.qjsSetInterruptBudget.Call(ctx, uint64(checks))
+	if err != nil {
+		return err
+	}
+	if int32(results[0]) != 0 {
+		return errors.New("qjs_set_interrupt_budget returned error")
+	}
+	return nil
+}
+
+// InterruptBudget returns the interrupt checks left in the budget, 0 once the
+// budget interrupted a run, or -1 when the budget is unlimited.
+func (q *QuickJS) InterruptBudget(ctx context.Context) (int64, error) {
+	if q.qjsGetInterruptBudget == nil {
+		return 0, errors.New("interrupt budget exports not available")
+	}
+	results, err := q.qjsGetInterruptBudget.Call(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return int64(results[0]), nil
 }
 
 // jsValueIsException checks if a JSValue is an exception.

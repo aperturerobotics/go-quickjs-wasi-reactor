@@ -1,5 +1,3 @@
-github.com/aperturerobotics/wazero v0.0.0-20260216034438-ad84e6308a28 h1:/+tsxRY9dWFjlsUWzzUomB1+VnK9GE736AzM16nfjyk=
-github.com/aperturerobotics/wazero v0.0.0-20260216034438-ad84e6308a28/go.mod h1:eV28rsN8Q+xwjogd7f4/Pp4xFxO7uOGbLcD/LzB1wiU=
 github.com/aperturerobotics/wazero v0.0.0-20261014234428-5d5bd8d111fe h1:Y1z3HRqzdcRBo/KgzVYOGbjmx69x6/Iaok+sELrFywQ=
 github.com/aperturerobotics/wazero v0.0.0-20261014234428-5d5bd8d111fe/go.mod h1:eV28rsN8Q+xwjogd7f4/Pp4xFxO7uOGbLcD/LzB1wiU=
 golang.org/x/sys v0.38.0 h1:3yZWxaJjBmCWXqhN1qh02AkOnCQ1poK6oF+a7xWL6Gc=
