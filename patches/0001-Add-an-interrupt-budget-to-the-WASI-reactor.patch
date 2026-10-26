@@ -1,0 +1,76 @@
+From dd38f13bea5a004208f7c656824861dffb04e015 Mon Sep 17 00:00:00 2001
+From: Christian Stewart <christian@aperture.us>
+Date: Mon, 26 Oct 2026 03:35:37 -0700
+Subject: [PATCH] Add an interrupt budget to the WASI reactor
+
+qjs_set_interrupt_budget installs an interrupt handler that lets the
+runtime pass a given number of interrupt checks, then throws the
+uncatchable interrupted error. QuickJS checks every 10000 branches and
+calls, so the budget bounds a run by a count of operations that is the
+same on every host, which a host cannot do itself because the reactor
+does not export its function table. qjs_get_interrupt_budget returns the
+checks left, 0 once the budget interrupted a run.
+
+Signed-off-by: Christian Stewart <christian@aperture.us>
+---
+ qjs-wasi-reactor.c | 39 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+
+diff --git a/qjs-wasi-reactor.c b/qjs-wasi-reactor.c
+index 91d74eb..cbb54e0 100644
+--- a/qjs-wasi-reactor.c
++++ b/qjs-wasi-reactor.c
+@@ -193,6 +193,44 @@ JSContext *qjs_get_context(void)
+     return reactor_ctx;
+ }
+ 
++/* Remaining interrupt checks before the runtime interrupts, or -1 when the
++ * budget is unlimited. QuickJS checks for interrupts every 10000 bytecode
++ * branches and calls, so a budget of N checks bounds a run by about N * 10000
++ * operations, the same on every host. */
++static int64_t interrupt_budget = -1;
++
++static int interrupt_budget_handler(JSRuntime *rt, void *opaque)
++{
++    if (interrupt_budget < 0)
++        return 0;
++    if (interrupt_budget == 0)
++        return 1;
++    interrupt_budget--;
++    return 0;
++}
++
++/* Set the number of interrupt checks the runtime may pass before it throws an
++ * uncatchable "interrupted" error, or -1 for no limit. */
++__attribute__((export_name("qjs_set_interrupt_budget")))
++int qjs_set_interrupt_budget(int64_t checks)
++{
++    if (!reactor_rt)
++        return -1;
++    interrupt_budget = checks < 0 ? -1 : checks;
++    JS_SetInterruptHandler(reactor_rt,
++                           interrupt_budget < 0 ? NULL : interrupt_budget_handler,
++                           NULL);
++    return 0;
++}
++
++/* Return the interrupt checks left in the budget, 0 once the budget
++ * interrupted a run, or -1 when the budget is unlimited. */
++__attribute__((export_name("qjs_get_interrupt_budget")))
++int64_t qjs_get_interrupt_budget(void)
++{
++    return interrupt_budget;
++}
++
+ __attribute__((export_name("qjs_destroy")))
+ void qjs_destroy(void)
+ {
+@@ -205,4 +243,5 @@ void qjs_destroy(void)
+         JS_FreeRuntime(reactor_rt);
+         reactor_rt = NULL;
+     }
++    interrupt_budget = -1;
+ }
+-- 
+2.54.0 (Apple Git-157)
+

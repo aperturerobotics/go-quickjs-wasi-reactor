@@ -217,21 +217,26 @@ repl script.mjs --module
 
 ## Updating
 
-To update to the latest QuickJS-NG reactor build from upstream releases:
+To rebuild the reactor from the latest QuickJS-NG release:
 
 ```bash
-# Download latest release automatically
+# Build the latest release
 ./update-quickjs.bash
 
 # Or specify a release tag
-./update-quickjs.bash v0.12.1
+./update-quickjs.bash v0.17.0
 ```
 
 This script will:
 
 1. Fetch the latest release tag from `quickjs-ng/quickjs` (or use the provided tag)
-2. Download the `qjs-wasi-reactor.wasm` release artifact
-3. Generate `version.go` with version and download URL constants
+2. Clone that tag and apply each patch in `patches/`
+3. Build the reactor with wasi-sdk and an 8 MiB stack
+4. Generate `version.go` with the version and source constants
+
+The patches add `qjs_set_interrupt_budget` and `qjs_get_interrupt_budget`,
+which bound a run by a count of QuickJS interrupt checks. They are kept on the
+`wasi-reactor-interrupt-budget` branch of `paralin/quickjs`.
 
 A GitHub Actions workflow (`.github/workflows/update-quickjs.yml`) also runs daily to automatically check for new upstream releases and publish updated versions.
 

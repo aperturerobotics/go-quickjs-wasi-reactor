@@ -13,6 +13,10 @@ set -euo pipefail
 # QuickJS-NG v0.16 and later give the C API default visibility only when
 # BUILDING_QJS_SHARED is set, so the reactor defines it to export that API.
 # quickjs-ng/quickjs#1804 moves this into the reactor target upstream.
+#
+# The build applies each patch in patches/ to the release source. The
+# interrupt budget patch is kept on the wasi-reactor-interrupt-budget branch of
+# paralin/quickjs.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="quickjs-ng/quickjs"
@@ -51,6 +55,10 @@ curl -fsSL "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$
 # Build the reactor from the release tag.
 echo "Building $TAG..."
 git clone -q --depth 1 --branch "$TAG" "https://github.com/$REPO.git" "$WORK_DIR/quickjs"
+for patch in "$SCRIPT_DIR"/patches/*.patch; do
+    echo "Applying $(basename "$patch")..."
+    git -C "$WORK_DIR/quickjs" apply "$patch"
+done
 cmake -S "$WORK_DIR/quickjs" -B "$WORK_DIR/build" \
     -DCMAKE_TOOLCHAIN_FILE="$WORK_DIR/$SDK_NAME/share/cmake/wasi-sdk.cmake" \
     -DQJS_BUILD_WERROR=ON \
@@ -70,7 +78,8 @@ package quickjswasi
 const (
 	// Version is the QuickJS-NG reactor version
 	Version = "$TAG"
-	// SourceURL is the source tree this WASM file was built from
+	// SourceURL is the source tree this WASM file was built from, with the
+	// patches in patches/ applied
 	SourceURL = "https://github.com/$REPO/tree/$TAG"
 	// WasiSDKVersion is the wasi-sdk release that built this WASM file
 	WasiSDKVersion = "$WASI_SDK_VERSION"

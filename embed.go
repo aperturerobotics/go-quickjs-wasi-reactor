@@ -277,6 +277,18 @@ const (
 	// ExportQJSDestroy cleans up the reactor runtime.
 	// Signature: qjs_destroy() -> void
 	ExportQJSDestroy = "qjs_destroy"
+
+	// ExportQJSSetInterruptBudget sets the interrupt checks the runtime may
+	// pass before it throws an uncatchable "interrupted" error, or -1 for no
+	// limit. QuickJS checks every 10000 bytecode branches and calls.
+	// Signature: qjs_set_interrupt_budget(checks: i64) -> i32
+	// Returns: 0 on success, -1 before initialization
+	ExportQJSSetInterruptBudget = "qjs_set_interrupt_budget"
+
+	// ExportQJSGetInterruptBudget returns the interrupt checks left.
+	// Signature: qjs_get_interrupt_budget() -> i64
+	// Returns: checks left, 0 once the budget interrupted a run, -1 if unlimited
+	ExportQJSGetInterruptBudget = "qjs_get_interrupt_budget"
 )
 
 // Standard library exports (quickjs-libc.h)

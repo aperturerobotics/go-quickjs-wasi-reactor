@@ -4,7 +4,8 @@ package quickjswasi
 const (
 	// Version is the QuickJS-NG reactor version
 	Version = "v0.17.0"
-	// SourceURL is the source tree this WASM file was built from
+	// SourceURL is the source tree this WASM file was built from, with the
+	// patches in patches/ applied
 	SourceURL = "https://github.com/quickjs-ng/quickjs/tree/v0.17.0"
 	// WasiSDKVersion is the wasi-sdk release that built this WASM file
 	WasiSDKVersion = "29"
