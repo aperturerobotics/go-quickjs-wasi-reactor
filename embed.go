@@ -1,3 +1,19 @@
+// Package quickjswasi embeds the QuickJS-NG engine built as a WASI reactor,
+// with the names and constants a host needs to drive it.
+//
+// A reactor module exports its functions and returns from initialization
+// instead of running a main loop in _start, so the host decides when
+// JavaScript runs: it evaluates code, then steps the event loop with
+// js_std_loop_once and polls I/O with js_std_poll_io when it knows input is
+// ready. The Export constants name the C functions from quickjs.h,
+// quickjs-libc.h and the reactor's qjs_* entry points, with each one's WASM
+// signature. A JSValue crosses the boundary as a 64-bit integer whose upper
+// half is its tag; JSValueException marks a call that threw.
+//
+// Version, SourceURL and WasiSDKVersion record what built QuickJSWASM, and the
+// patches/ directory holds the changes applied to that source. Bytecode from
+// JS_WriteObject is only valid for the same build. The wazero-quickjs module
+// wraps this package in a Go API for wazero.
 package quickjswasi
 
 import _ "embed"

@@ -1,5 +1,21 @@
-// Package quickjs provides a high-level Go API for running JavaScript
-// using the QuickJS WASI reactor module with wazero.
+// Package quickjs runs JavaScript in the QuickJS WASI reactor on wazero.
+//
+// A QuickJS instance owns one module instance and one JavaScript context.
+// Its lifecycle is NewQuickJS (or CompileQuickJS once and NewQuickJSWithModule
+// per instance), then Init with qjs-style arguments, then any number of Eval,
+// CompileModule and LoadModule calls, then Close. Before Init the evaluation,
+// loop, bytecode and SetInterruptBudget calls return an error, and Init
+// refuses a second call.
+//
+// The host drives the event loop. RunLoop steps it until no timers or jobs
+// remain, sleeping until the next timer, and stops when its context ends.
+// A host that interleaves its own work calls LoopOnce and acts on the
+// LoopResult, and calls PollIO when it knows an fd the script reads, such as
+// stdin, has data. SetInterruptBudget bounds how long a run may execute
+// before QuickJS throws an uncatchable error.
+//
+// An instance is not safe for concurrent use: the guest has one stack and
+// one heap, so the host calls it from one goroutine at a time.
 package quickjs
 
 import (
